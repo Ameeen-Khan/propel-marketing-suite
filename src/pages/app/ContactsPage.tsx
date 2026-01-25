@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { Contact } from '@/types';
+import { TagInput } from '@/components/contact/TagInput';
 import {
   Plus,
   MoreHorizontal,
@@ -50,15 +52,16 @@ const contactSchema = z.object({
   bathrooms: z.number().optional(),
   square_feet: z.number().optional(),
   preferred_location: z.string().optional(),
+  custom_tags: z.array(z.string()).optional(),
   notes: z.string().optional(),
 });
 
 // Mock data
 const mockContacts: Contact[] = [
-  { id: '1', first_name: 'Alice', last_name: 'Johnson', email: 'alice@email.com', phone: '+1-555-0101', property_type: 'House', budget_min: 300000, budget_max: 500000, bedrooms: 3, bathrooms: 2, square_feet: 2000, preferred_location: 'Downtown', preferences: ['Pool', 'Garden'], notes: 'Looking for family home', created_at: '2024-01-10' },
-  { id: '2', first_name: 'Bob', last_name: 'Smith', email: 'bob@email.com', phone: '+1-555-0102', property_type: 'Condo', budget_min: 200000, budget_max: 350000, bedrooms: 2, bathrooms: 1, square_feet: 1200, preferred_location: 'Suburbs', preferences: ['Gym', 'Parking'], notes: '', created_at: '2024-02-15' },
-  { id: '3', first_name: 'Carol', last_name: 'Davis', email: 'carol@email.com', phone: '+1-555-0103', property_type: 'Apartment', budget_min: 150000, budget_max: 250000, bedrooms: 1, bathrooms: 1, square_feet: 800, preferred_location: 'City Center', preferences: ['Balcony'], notes: 'First-time buyer', created_at: '2024-03-20' },
-  { id: '4', first_name: 'David', last_name: 'Wilson', email: 'david@email.com', phone: '+1-555-0104', property_type: 'House', budget_min: 500000, budget_max: 800000, bedrooms: 4, bathrooms: 3, square_feet: 3500, preferred_location: 'Waterfront', preferences: ['Pool', 'Garage', 'View'], notes: 'Investment property', created_at: '2024-04-05' },
+  { id: '1', first_name: 'Alice', last_name: 'Johnson', email: 'alice@email.com', phone: '+1-555-0101', property_type: 'House', budget_min: 300000, budget_max: 500000, bedrooms: 3, bathrooms: 2, square_feet: 2000, preferred_location: 'Downtown', custom_tags: ['VIP', 'Hot Lead'], notes: 'Looking for family home', created_at: '2024-01-10' },
+  { id: '2', first_name: 'Bob', last_name: 'Smith', email: 'bob@email.com', phone: '+1-555-0102', property_type: 'Condo', budget_min: 200000, budget_max: 350000, bedrooms: 2, bathrooms: 1, square_feet: 1200, preferred_location: 'Suburbs', custom_tags: ['First-time buyer'], notes: '', created_at: '2024-02-15' },
+  { id: '3', first_name: 'Carol', last_name: 'Davis', email: 'carol@email.com', phone: '+1-555-0103', property_type: 'Apartment', budget_min: 150000, budget_max: 250000, bedrooms: 1, bathrooms: 1, square_feet: 800, preferred_location: 'City Center', custom_tags: [], notes: 'First-time buyer', created_at: '2024-03-20' },
+  { id: '4', first_name: 'David', last_name: 'Wilson', email: 'david@email.com', phone: '+1-555-0104', property_type: 'House', budget_min: 500000, budget_max: 800000, bedrooms: 4, bathrooms: 3, square_feet: 3500, preferred_location: 'Waterfront', custom_tags: ['VIP', 'Investor'], notes: 'Investment property', created_at: '2024-04-05' },
 ];
 
 export function ContactsPage() {
@@ -91,6 +94,7 @@ export function ContactsPage() {
     bathrooms: '',
     square_feet: '',
     preferred_location: '',
+    custom_tags: [] as string[],
     notes: '',
   });
 
@@ -128,6 +132,7 @@ export function ContactsPage() {
       bathrooms: '',
       square_feet: '',
       preferred_location: '',
+      custom_tags: [],
       notes: '',
     });
     setFormErrors({});
@@ -147,6 +152,7 @@ export function ContactsPage() {
       bathrooms: formData.bathrooms ? Number(formData.bathrooms) : undefined,
       square_feet: formData.square_feet ? Number(formData.square_feet) : undefined,
       preferred_location: formData.preferred_location || undefined,
+      custom_tags: formData.custom_tags,
       notes: formData.notes || undefined,
     };
 
@@ -186,6 +192,7 @@ export function ContactsPage() {
       bathrooms: formData.bathrooms ? Number(formData.bathrooms) : undefined,
       square_feet: formData.square_feet ? Number(formData.square_feet) : undefined,
       preferred_location: formData.preferred_location || undefined,
+      custom_tags: formData.custom_tags,
       notes: formData.notes || undefined,
     };
 
@@ -251,6 +258,7 @@ export function ContactsPage() {
       bathrooms: contact.bathrooms?.toString() || '',
       square_feet: contact.square_feet?.toString() || '',
       preferred_location: contact.preferred_location || '',
+      custom_tags: contact.custom_tags || [],
       notes: contact.notes || '',
     });
     setFormErrors({});
@@ -281,14 +289,26 @@ export function ContactsPage() {
       cell: (contact) => contact.property_type || '-',
     },
     {
-      key: 'budget',
-      header: 'Budget',
-      cell: (contact) => {
-        if (!contact.budget_min && !contact.budget_max) return '-';
-        const min = contact.budget_min ? `$${contact.budget_min.toLocaleString()}` : '';
-        const max = contact.budget_max ? `$${contact.budget_max.toLocaleString()}` : '';
-        return `${min} - ${max}`;
-      },
+      key: 'tags',
+      header: 'Tags',
+      cell: (contact) => (
+        <div className="flex flex-wrap gap-1">
+          {contact.custom_tags.length > 0 ? (
+            contact.custom_tags.slice(0, 2).map((tag) => (
+              <Badge key={tag} variant="secondary" className="text-xs">
+                {tag}
+              </Badge>
+            ))
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+          {contact.custom_tags.length > 2 && (
+            <Badge variant="outline" className="text-xs">
+              +{contact.custom_tags.length - 2}
+            </Badge>
+          )}
+        </div>
+      ),
     },
     {
       key: 'created_at',
@@ -494,6 +514,14 @@ export function ContactsPage() {
                 type="number"
                 value={formData.square_feet}
                 onChange={(e) => setFormData({ ...formData, square_feet: e.target.value })}
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label>Custom Tags</Label>
+              <TagInput
+                tags={formData.custom_tags}
+                onChange={(tags) => setFormData({ ...formData, custom_tags: tags })}
+                placeholder="Type and press Enter to add tags..."
               />
             </div>
             <div className="col-span-2 space-y-2">

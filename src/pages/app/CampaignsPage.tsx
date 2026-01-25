@@ -3,6 +3,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -43,7 +45,7 @@ import { z } from 'zod';
 const campaignSchema = z.object({
   name: z.string().min(1, 'Campaign name is required').max(100),
   template_id: z.string().min(1, 'Template is required'),
-  audience_id: z.string().min(1, 'Audience is required'),
+  audience_ids: z.array(z.string()).min(1, 'At least one audience is required'),
   schedule_type: z.enum(['once', 'recurring']),
   scheduled_at: z.string().optional(),
   recurrence_mode: z.enum(['daily', 'weekly', 'monthly']).optional(),
@@ -52,10 +54,10 @@ const campaignSchema = z.object({
 
 // Mock data
 const mockCampaigns: Campaign[] = [
-  { id: '1', name: 'Welcome Series', template_id: '1', template_name: 'Welcome Email', audience_id: '1', audience_name: 'New Leads', recipients: 150, schedule_type: 'once', scheduled_at: '2024-04-15T10:00:00Z', status: 'completed', created_at: '2024-04-10', updated_at: '2024-04-15' },
-  { id: '2', name: 'Weekly Newsletter', template_id: '3', template_name: 'Monthly Newsletter', audience_id: '2', audience_name: 'All Contacts', recipients: 500, schedule_type: 'recurring', recurrence: { mode: 'weekly', time: '09:00', day_of_week: 1 }, status: 'running', created_at: '2024-03-01', updated_at: '2024-04-20' },
-  { id: '3', name: 'New Listing Alert', template_id: '2', template_name: 'New Listing Alert', audience_id: '3', audience_name: 'Buyers', recipients: 200, schedule_type: 'once', scheduled_at: '2024-04-25T14:00:00Z', status: 'scheduled', created_at: '2024-04-18', updated_at: '2024-04-18' },
-  { id: '4', name: 'Monthly Market Update', template_id: '3', template_name: 'Monthly Newsletter', audience_id: '2', audience_name: 'All Contacts', recipients: 500, schedule_type: 'recurring', recurrence: { mode: 'monthly', time: '10:00', day_of_month: 1 }, status: 'paused', created_at: '2024-02-01', updated_at: '2024-04-01' },
+  { id: '1', name: 'Welcome Series', template_id: '1', template_name: 'Welcome Email', audience_ids: ['1'], audience_names: ['New Leads'], recipients: 150, schedule_type: 'once', scheduled_at: '2024-04-15T10:00:00Z', status: 'completed', created_at: '2024-04-10', updated_at: '2024-04-15' },
+  { id: '2', name: 'Weekly Newsletter', template_id: '3', template_name: 'Monthly Newsletter', audience_ids: ['2'], audience_names: ['All Contacts'], recipients: 500, schedule_type: 'recurring', recurrence: { mode: 'weekly', time: '09:00', day_of_week: 1 }, status: 'running', created_at: '2024-03-01', updated_at: '2024-04-20' },
+  { id: '3', name: 'New Listing Alert', template_id: '2', template_name: 'New Listing Alert', audience_ids: ['3'], audience_names: ['Buyers'], recipients: 200, schedule_type: 'once', scheduled_at: '2024-04-25T14:00:00Z', status: 'scheduled', created_at: '2024-04-18', updated_at: '2024-04-18' },
+  { id: '4', name: 'Monthly Market Update', template_id: '3', template_name: 'Monthly Newsletter', audience_ids: ['2', '3'], audience_names: ['All Contacts', 'Buyers'], recipients: 700, schedule_type: 'recurring', recurrence: { mode: 'monthly', time: '10:00', day_of_month: 1 }, status: 'paused', created_at: '2024-02-01', updated_at: '2024-04-01' },
 ];
 
 const mockTemplates = [
@@ -90,7 +92,7 @@ export function CampaignsPage() {
   const [formData, setFormData] = useState({
     name: '',
     template_id: '',
-    audience_id: '',
+    audience_ids: [] as string[],
     schedule_type: 'once' as ScheduleType,
     scheduled_at: '',
     recurrence_mode: '' as RecurrenceMode | '',
@@ -121,7 +123,7 @@ export function CampaignsPage() {
     setFormData({
       name: '',
       template_id: '',
-      audience_id: '',
+      audience_ids: [],
       schedule_type: 'once',
       scheduled_at: '',
       recurrence_mode: '',
@@ -188,7 +190,7 @@ export function CampaignsPage() {
     setFormData({
       name: campaign.name,
       template_id: campaign.template_id,
-      audience_id: campaign.audience_id,
+      audience_ids: campaign.audience_ids,
       schedule_type: campaign.schedule_type,
       scheduled_at: campaign.scheduled_at || '',
       recurrence_mode: campaign.recurrence?.mode || '',
@@ -196,6 +198,15 @@ export function CampaignsPage() {
     });
     setFormErrors({});
     setIsEditOpen(true);
+  };
+
+  const toggleAudience = (audienceId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      audience_ids: prev.audience_ids.includes(audienceId)
+        ? prev.audience_ids.filter(id => id !== audienceId)
+        : [...prev.audience_ids, audienceId],
+    }));
   };
 
   const getStatusVariant = (status: CampaignStatus) => {
@@ -220,6 +231,19 @@ export function CampaignsPage() {
       key: 'template',
       header: 'Template',
       cell: (campaign) => campaign.template_name,
+    },
+    {
+      key: 'audiences',
+      header: 'Audiences',
+      cell: (campaign) => (
+        <div className="flex flex-wrap gap-1">
+          {campaign.audience_names.map((name, i) => (
+            <Badge key={i} variant="secondary" className="text-xs">
+              {name}
+            </Badge>
+          ))}
+        </div>
+      ),
     },
     {
       key: 'recipients',
@@ -293,7 +317,7 @@ export function CampaignsPage() {
     <div className="page-container">
       <PageHeader
         title="Campaigns"
-        description="Create and manage email marketing campaigns"
+        description="Create and manage email marketing campaigns targeting audiences"
         actions={
           <Button onClick={() => { resetForm(); setIsCreateOpen(true); }}>
             <Plus className="w-4 h-4 mr-2" />
@@ -330,7 +354,7 @@ export function CampaignsPage() {
           <DialogHeader>
             <DialogTitle>{isEditOpen ? 'Edit Campaign' : 'Create Campaign'}</DialogTitle>
             <DialogDescription>
-              {isEditOpen ? 'Update campaign details.' : 'Set up a new email campaign.'}
+              {isEditOpen ? 'Update campaign details.' : 'Set up a new email campaign targeting audiences.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -366,23 +390,27 @@ export function CampaignsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="audience">Target Audience *</Label>
-              <Select
-                value={formData.audience_id}
-                onValueChange={(value) => setFormData({ ...formData, audience_id: value })}
-              >
-                <SelectTrigger className={formErrors.audience_id ? 'border-destructive' : ''}>
-                  <SelectValue placeholder="Select audience" />
-                </SelectTrigger>
-                <SelectContent>
-                  {mockAudiences.map((audience) => (
-                    <SelectItem key={audience.id} value={audience.id}>
-                      {audience.name} ({audience.contact_count} contacts)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {formErrors.audience_id && <p className="text-sm text-destructive">{formErrors.audience_id}</p>}
+              <Label>Target Audiences *</Label>
+              <div className="border rounded-md p-3 space-y-2">
+                {mockAudiences.map((audience) => (
+                  <label
+                    key={audience.id}
+                    className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={formData.audience_ids.includes(audience.id)}
+                      onCheckedChange={() => toggleAudience(audience.id)}
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium">{audience.name}</span>
+                      <span className="text-xs text-muted-foreground ml-2">
+                        ({audience.contact_count} contacts)
+                      </span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              {formErrors.audience_ids && <p className="text-sm text-destructive">{formErrors.audience_ids}</p>}
             </div>
 
             <div className="space-y-2">

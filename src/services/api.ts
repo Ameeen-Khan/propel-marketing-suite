@@ -8,8 +8,6 @@ import {
   Contact,
   CreateContactPayload,
   UpdateContactPayload,
-  Preference,
-  CreatePreferencePayload,
   Audience,
   CreateAudiencePayload,
   UpdateAudiencePayload,
@@ -218,18 +216,6 @@ export const contactsApi = {
 
   listImports: (params: PaginationParams) =>
     apiFetch<PaginatedResponse<CSVImportJob>>(`/contacts/imports?${buildQueryString(params)}`),
-};
-
-// Preferences API
-export const preferencesApi = {
-  list: (params: PaginationParams) =>
-    apiFetch<PaginatedResponse<Preference>>(`/preferences?${buildQueryString(params)}`),
-
-  create: (payload: CreatePreferencePayload) =>
-    apiFetch<Preference>('/preferences', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
 };
 
 // Audiences API

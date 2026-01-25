@@ -7,7 +7,6 @@ import {
   Mail,
   Megaphone,
   Target,
-  Settings,
   Bell,
   LogOut,
   Menu,
@@ -36,7 +35,6 @@ const baseNavigation = [
   { name: 'Templates', href: '/app/templates', icon: Mail },
   { name: 'Campaigns', href: '/app/campaigns', icon: Megaphone },
   { name: 'Audiences', href: '/app/audiences', icon: Target },
-  { name: 'Preferences', href: '/app/preferences', icon: Settings },
 ];
 
 const adminOnlyNavigation = [
