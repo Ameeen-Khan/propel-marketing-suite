@@ -26,7 +26,6 @@ import { ContactsPage } from "./pages/app/ContactsPage";
 import { TemplatesPage } from "./pages/app/TemplatesPage";
 import { CampaignsPage } from "./pages/app/CampaignsPage";
 import { AudiencesPage } from "./pages/app/AudiencesPage";
-import { PreferencesPage } from "./pages/app/PreferencesPage";
 import { NotificationsPage } from "./pages/app/NotificationsPage";
 import { AgentsPage } from "./pages/app/AgentsPage";
 
@@ -82,7 +81,6 @@ const App = () => (
               <Route path="templates" element={<TemplatesPage />} />
               <Route path="campaigns" element={<CampaignsPage />} />
               <Route path="audiences" element={<AudiencesPage />} />
-              <Route path="preferences" element={<PreferencesPage />} />
               <Route path="notifications" element={<NotificationsPage />} />
               {/* Agents page only for org_admin - handled in component/layout */}
               <Route path="agents" element={<AgentsPage />} />

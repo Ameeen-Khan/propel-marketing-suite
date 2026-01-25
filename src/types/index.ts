@@ -86,7 +86,7 @@ export interface Contact {
   bathrooms?: number;
   square_feet?: number;
   preferred_location?: string;
-  preferences: string[];
+  custom_tags: string[];
   notes?: string;
   created_at: string;
 }
@@ -103,21 +103,24 @@ export interface CreateContactPayload {
   bathrooms?: number;
   square_feet?: number;
   preferred_location?: string;
-  preferences?: string[];
+  custom_tags?: string[];
   notes?: string;
 }
 
 export interface UpdateContactPayload extends Partial<CreateContactPayload> {}
 
-// Preference types
-export interface Preference {
-  id: string;
-  name: string;
-  created_at: string;
-}
-
-export interface CreatePreferencePayload {
-  name: string;
+// Audience Filter types
+export interface AudienceFilters {
+  property_type?: string[];
+  bedrooms?: number[];
+  bathrooms?: number[];
+  budget_min?: number;
+  budget_max?: number;
+  square_feet_min?: number;
+  square_feet_max?: number;
+  preferred_location?: string[];
+  custom_tags?: string[];
+  notes_search?: string;
 }
 
 // Audience types
@@ -125,6 +128,7 @@ export interface Audience {
   id: string;
   name: string;
   description?: string;
+  filters?: AudienceFilters;
   contact_count: number;
   created_at: string;
 }
@@ -132,12 +136,14 @@ export interface Audience {
 export interface CreateAudiencePayload {
   name: string;
   description?: string;
+  filters?: AudienceFilters;
   contact_ids?: string[];
 }
 
 export interface UpdateAudiencePayload {
   name?: string;
   description?: string;
+  filters?: AudienceFilters;
 }
 
 export interface AssignContactsPayload {
@@ -191,8 +197,8 @@ export interface Campaign {
   name: string;
   template_id: string;
   template_name: string;
-  audience_id: string;
-  audience_name: string;
+  audience_ids: string[];
+  audience_names: string[];
   recipients: number;
   schedule_type: ScheduleType;
   scheduled_at?: string;
@@ -205,7 +211,7 @@ export interface Campaign {
 export interface CreateCampaignPayload {
   name: string;
   template_id: string;
-  audience_id: string;
+  audience_ids: string[];
   schedule_type: ScheduleType;
   scheduled_at?: string;
   recurrence?: CampaignRecurrence;
