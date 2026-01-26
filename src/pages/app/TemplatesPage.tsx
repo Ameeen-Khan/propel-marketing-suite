@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { EmailTemplate } from '@/types';
 import {
   Plus,
@@ -39,20 +40,20 @@ const templateSchema = z.object({
   subject: z.string().min(1, 'Subject is required').max(200),
   preheader: z.string().max(200).optional(),
   from_name: z.string().min(1, 'From name is required').max(100),
-  reply_to: z.string().email('Please enter a valid email'),
   html_body: z.string().min(1, 'HTML body is required'),
   plain_text_body: z.string().min(1, 'Plain text body is required'),
 });
 
 // Mock data
 const mockTemplates: EmailTemplate[] = [
-  { id: '1', name: 'Welcome Email', subject: 'Welcome to {{company_name}}!', preheader: 'Start your journey', from_name: 'Acme Real Estate', reply_to: 'hello@acme.com', html_body: '<h1>Welcome!</h1><p>Thank you for joining us.</p>', plain_text_body: 'Welcome! Thank you for joining us.', created_at: '2024-01-15', updated_at: '2024-01-15' },
-  { id: '2', name: 'New Listing Alert', subject: 'New Property: {{property_name}}', preheader: 'Check out this listing', from_name: 'Listings Team', reply_to: 'listings@acme.com', html_body: '<h1>New Listing</h1><p>We found a property you might like.</p>', plain_text_body: 'New Listing: We found a property you might like.', created_at: '2024-02-20', updated_at: '2024-03-01' },
-  { id: '3', name: 'Monthly Newsletter', subject: 'Your Monthly Market Update', preheader: 'Market trends and tips', from_name: 'Newsletter', reply_to: 'newsletter@acme.com', html_body: '<h1>Monthly Update</h1><p>Here is your market update.</p>', plain_text_body: 'Monthly Update: Here is your market update.', created_at: '2024-03-10', updated_at: '2024-03-15' },
+  { id: '1', name: 'Welcome Email', subject: 'Welcome to {{company_name}}!', preheader: 'Start your journey', from_name: 'Acme Real Estate', html_body: '<h1>Welcome!</h1><p>Thank you for joining us.</p>', plain_text_body: 'Welcome! Thank you for joining us.', created_at: '2024-01-15', updated_at: '2024-01-15' },
+  { id: '2', name: 'New Listing Alert', subject: 'New Property: {{property_name}}', preheader: 'Check out this listing', from_name: 'Listings Team', html_body: '<h1>New Listing</h1><p>We found a property you might like.</p>', plain_text_body: 'New Listing: We found a property you might like.', created_at: '2024-02-20', updated_at: '2024-03-01' },
+  { id: '3', name: 'Monthly Newsletter', subject: 'Your Monthly Market Update', preheader: 'Market trends and tips', from_name: 'Newsletter', html_body: '<h1>Monthly Update</h1><p>Here is your market update.</p>', plain_text_body: 'Monthly Update: Here is your market update.', created_at: '2024-03-10', updated_at: '2024-03-15' },
 ];
 
 export function TemplatesPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -70,12 +71,14 @@ export function TemplatesPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [testEmail, setTestEmail] = useState('');
 
+  // Default from_name to organization name
+  const defaultFromName = user?.organization_name || 'Your Organization';
+
   const [formData, setFormData] = useState({
     name: '',
     subject: '',
     preheader: '',
-    from_name: '',
-    reply_to: '',
+    from_name: defaultFromName,
     html_body: '',
     plain_text_body: '',
   });
@@ -106,8 +109,7 @@ export function TemplatesPage() {
       name: '',
       subject: '',
       preheader: '',
-      from_name: '',
-      reply_to: '',
+      from_name: defaultFromName,
       html_body: '',
       plain_text_body: '',
     });
@@ -197,7 +199,6 @@ export function TemplatesPage() {
       subject: template.subject,
       preheader: template.preheader || '',
       from_name: template.from_name,
-      reply_to: template.reply_to,
       html_body: template.html_body,
       plain_text_body: template.plain_text_body,
     });
@@ -343,17 +344,6 @@ export function TemplatesPage() {
                 {formErrors.from_name && <p className="text-sm text-destructive">{formErrors.from_name}</p>}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="reply_to">Reply To *</Label>
-                <Input
-                  id="reply_to"
-                  type="email"
-                  value={formData.reply_to}
-                  onChange={(e) => setFormData({ ...formData, reply_to: e.target.value })}
-                  className={formErrors.reply_to ? 'border-destructive' : ''}
-                />
-                {formErrors.reply_to && <p className="text-sm text-destructive">{formErrors.reply_to}</p>}
-              </div>
-              <div className="col-span-2 space-y-2">
                 <Label htmlFor="preheader">Preheader</Label>
                 <Input
                   id="preheader"
