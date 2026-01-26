@@ -86,8 +86,6 @@ export interface Contact {
   bathrooms?: number;
   square_feet?: number;
   preferred_location?: string;
-  custom_tags: string[];
-  notes?: string;
   created_at: string;
 }
 
@@ -103,8 +101,6 @@ export interface CreateContactPayload {
   bathrooms?: number;
   square_feet?: number;
   preferred_location?: string;
-  custom_tags?: string[];
-  notes?: string;
 }
 
 export interface UpdateContactPayload extends Partial<CreateContactPayload> {}
@@ -119,8 +115,6 @@ export interface AudienceFilters {
   square_feet_min?: number;
   square_feet_max?: number;
   preferred_location?: string[];
-  custom_tags?: string[];
-  notes_search?: string;
 }
 
 // Audience types
@@ -157,7 +151,6 @@ export interface EmailTemplate {
   subject: string;
   preheader?: string;
   from_name: string;
-  reply_to: string;
   html_body: string;
   plain_text_body: string;
   created_at: string;
@@ -169,7 +162,6 @@ export interface CreateEmailTemplatePayload {
   subject: string;
   preheader?: string;
   from_name: string;
-  reply_to: string;
   html_body: string;
   plain_text_body: string;
 }

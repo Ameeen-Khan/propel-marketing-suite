@@ -4,14 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Collapsible,
   CollapsibleContent,
@@ -43,14 +35,12 @@ export function AudienceFilterPanel({
     const bedrooms = new Set<number>();
     const bathrooms = new Set<number>();
     const locations = new Set<string>();
-    const tags = new Set<string>();
 
     contacts.forEach((contact) => {
       if (contact.property_type) propertyTypes.add(contact.property_type);
       if (contact.bedrooms) bedrooms.add(contact.bedrooms);
       if (contact.bathrooms) bathrooms.add(contact.bathrooms);
       if (contact.preferred_location) locations.add(contact.preferred_location);
-      contact.custom_tags?.forEach((tag) => tags.add(tag));
     });
 
     return {
@@ -58,7 +48,6 @@ export function AudienceFilterPanel({
       bedrooms: Array.from(bedrooms).sort((a, b) => a - b),
       bathrooms: Array.from(bathrooms).sort((a, b) => a - b),
       locations: Array.from(locations).sort(),
-      tags: Array.from(tags).sort(),
     };
   }, [contacts]);
 
@@ -92,14 +81,6 @@ export function AudienceFilterPanel({
       ? current.filter((l) => l !== loc)
       : [...current, loc];
     onFiltersChange({ ...filters, preferred_location: updated.length ? updated : undefined });
-  };
-
-  const handleTagToggle = (tag: string) => {
-    const current = filters.custom_tags || [];
-    const updated = current.includes(tag)
-      ? current.filter((t) => t !== tag)
-      : [...current, tag];
-    onFiltersChange({ ...filters, custom_tags: updated.length ? updated : undefined });
   };
 
   const clearFilters = () => {
@@ -299,46 +280,6 @@ export function AudienceFilterPanel({
                 </div>
               </div>
             )}
-
-            {/* Custom Tags */}
-            {distinctValues.tags.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase">
-                  Custom Tags
-                </Label>
-                <div className="flex flex-wrap gap-2">
-                  {distinctValues.tags.map((tag) => (
-                    <label
-                      key={tag}
-                      className="flex items-center gap-2 px-3 py-1.5 border rounded-md cursor-pointer hover:bg-muted transition-colors text-sm"
-                    >
-                      <Checkbox
-                        checked={filters.custom_tags?.includes(tag)}
-                        onCheckedChange={() => handleTagToggle(tag)}
-                      />
-                      {tag}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Notes Search */}
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase">
-                Notes Search
-              </Label>
-              <Input
-                placeholder="Search in notes..."
-                value={filters.notes_search || ''}
-                onChange={(e) =>
-                  onFiltersChange({
-                    ...filters,
-                    notes_search: e.target.value || undefined,
-                  })
-                }
-              />
-            </div>
 
             {/* Actions */}
             <div className="flex items-center justify-between pt-2 border-t">

@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -52,11 +51,11 @@ const mockAudiences: Audience[] = [
 ];
 
 const mockContacts: Contact[] = [
-  { id: '1', first_name: 'Alice', last_name: 'Johnson', email: 'alice@email.com', property_type: 'House', bedrooms: 3, bathrooms: 2, budget_min: 300000, budget_max: 500000, preferred_location: 'Downtown', custom_tags: ['VIP', 'Hot Lead'], notes: 'Looking for family home', created_at: '2024-01-10' },
-  { id: '2', first_name: 'Bob', last_name: 'Smith', email: 'bob@email.com', property_type: 'Condo', bedrooms: 2, bathrooms: 1, budget_min: 200000, budget_max: 350000, preferred_location: 'Suburbs', custom_tags: ['First-time buyer'], notes: '', created_at: '2024-02-15' },
-  { id: '3', first_name: 'Carol', last_name: 'Davis', email: 'carol@email.com', property_type: 'Apartment', bedrooms: 1, bathrooms: 1, budget_min: 150000, budget_max: 250000, preferred_location: 'City Center', custom_tags: [], notes: 'First-time buyer', created_at: '2024-03-20' },
-  { id: '4', first_name: 'David', last_name: 'Wilson', email: 'david@email.com', property_type: 'House', bedrooms: 4, bathrooms: 3, budget_min: 500000, budget_max: 800000, preferred_location: 'Waterfront', custom_tags: ['VIP', 'Investor'], notes: 'Investment property', created_at: '2024-04-05' },
-  { id: '5', first_name: 'Emma', last_name: 'Brown', email: 'emma@email.com', property_type: 'Townhouse', bedrooms: 3, bathrooms: 2, budget_min: 400000, budget_max: 550000, preferred_location: 'Downtown', custom_tags: ['Hot Lead'], notes: '', created_at: '2024-04-10' },
+  { id: '1', first_name: 'Alice', last_name: 'Johnson', email: 'alice@email.com', property_type: 'House', bedrooms: 3, bathrooms: 2, budget_min: 300000, budget_max: 500000, preferred_location: 'Downtown', created_at: '2024-01-10' },
+  { id: '2', first_name: 'Bob', last_name: 'Smith', email: 'bob@email.com', property_type: 'Condo', bedrooms: 2, bathrooms: 1, budget_min: 200000, budget_max: 350000, preferred_location: 'Suburbs', created_at: '2024-02-15' },
+  { id: '3', first_name: 'Carol', last_name: 'Davis', email: 'carol@email.com', property_type: 'Apartment', bedrooms: 1, bathrooms: 1, budget_min: 150000, budget_max: 250000, preferred_location: 'City Center', created_at: '2024-03-20' },
+  { id: '4', first_name: 'David', last_name: 'Wilson', email: 'david@email.com', property_type: 'House', bedrooms: 4, bathrooms: 3, budget_min: 500000, budget_max: 800000, preferred_location: 'Waterfront', created_at: '2024-04-05' },
+  { id: '5', first_name: 'Emma', last_name: 'Brown', email: 'emma@email.com', property_type: 'Townhouse', bedrooms: 3, bathrooms: 2, budget_min: 400000, budget_max: 550000, preferred_location: 'Downtown', created_at: '2024-04-10' },
 ];
 
 // Filter contacts based on AudienceFilters
@@ -96,19 +95,6 @@ function filterContacts(contacts: Contact[], filters: AudienceFilters): Contact[
     // Location filter
     if (filters.preferred_location?.length && contact.preferred_location) {
       if (!filters.preferred_location.includes(contact.preferred_location)) return false;
-    }
-
-    // Tags filter
-    if (filters.custom_tags?.length && contact.custom_tags) {
-      const hasMatchingTag = filters.custom_tags.some((tag) =>
-        contact.custom_tags.includes(tag)
-      );
-      if (!hasMatchingTag) return false;
-    }
-
-    // Notes search
-    if (filters.notes_search && contact.notes) {
-      if (!contact.notes.toLowerCase().includes(filters.notes_search.toLowerCase())) return false;
     }
 
     return true;
@@ -473,18 +459,17 @@ export function AudiencesPage() {
                           <p className="text-xs text-muted-foreground">{contact.email}</p>
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {contact.property_type}
+                          {contact.property_type || '-'}
                         </div>
                       </div>
                     ))}
                   </div>
                 </ScrollArea>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {selectedContactIds.length} contact(s) selected
+                </p>
               </TabsContent>
             </Tabs>
-
-            <div className="text-sm text-muted-foreground border-t pt-4">
-              {selectedContactIds.length} contact(s) selected
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setIsCreateOpen(false); resetForm(); }}>
@@ -492,7 +477,7 @@ export function AudiencesPage() {
             </Button>
             <Button onClick={handleCreate} disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Create Audience
+              Create Audience ({selectedContactIds.length} contacts)
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -506,33 +491,42 @@ export function AudiencesPage() {
           resetForm();
         }
       }}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Audience</DialogTitle>
             <DialogDescription>
-              Update audience details.
+              Update audience details and filters.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-name">Audience Name *</Label>
-              <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className={formErrors.name ? 'border-destructive' : ''}
-              />
-              {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Audience Name *</Label>
+                <Input
+                  id="edit-name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className={formErrors.name ? 'border-destructive' : ''}
+                />
+                {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description</Label>
+                <Input
+                  id="edit-description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
-              <Textarea
-                id="edit-description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-              />
-            </div>
+
+            <AudienceFilterPanel
+              contacts={mockContacts}
+              filters={filters}
+              onFiltersChange={setFilters}
+              onApplyFilters={handleApplyFilters}
+              matchingCount={matchingContacts.length}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setIsEditOpen(false); resetForm(); }}>
@@ -559,45 +553,61 @@ export function AudiencesPage() {
           <DialogHeader>
             <DialogTitle>Manage Members</DialogTitle>
             <DialogDescription>
-              Adjust filters or manually select contacts for "{selectedAudience?.name}"
+              Update members for "{selectedAudience?.name}"
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <AudienceFilterPanel
-              contacts={mockContacts}
-              filters={filters}
-              onFiltersChange={setFilters}
-              onApplyFilters={handleApplyFilters}
-              matchingCount={matchingContacts.length}
-            />
+            <Tabs defaultValue="filter">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="filter" className="gap-2">
+                  <Filter className="w-4 h-4" />
+                  Filter Contacts
+                </TabsTrigger>
+                <TabsTrigger value="manual" className="gap-2">
+                  <UserPlus className="w-4 h-4" />
+                  Manual Adjustment
+                </TabsTrigger>
+              </TabsList>
 
-            <ScrollArea className="h-[300px] border rounded-md p-4">
-              <div className="space-y-2">
-                {mockContacts.map((contact) => (
-                  <div
-                    key={contact.id}
-                    className="flex items-center space-x-3 p-2 rounded hover:bg-muted cursor-pointer"
-                    onClick={() => toggleContact(contact.id)}
-                  >
-                    <Checkbox
-                      checked={selectedContactIds.includes(contact.id)}
-                      onCheckedChange={() => toggleContact(contact.id)}
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{contact.first_name} {contact.last_name}</p>
-                      <p className="text-xs text-muted-foreground">{contact.email}</p>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {contact.property_type}
-                    </div>
+              <TabsContent value="filter" className="mt-4 space-y-4">
+                <AudienceFilterPanel
+                  contacts={mockContacts}
+                  filters={filters}
+                  onFiltersChange={setFilters}
+                  onApplyFilters={handleApplyFilters}
+                  matchingCount={matchingContacts.length}
+                />
+              </TabsContent>
+
+              <TabsContent value="manual" className="mt-4">
+                <ScrollArea className="h-[300px] border rounded-md p-4">
+                  <div className="space-y-2">
+                    {mockContacts.map((contact) => (
+                      <div
+                        key={contact.id}
+                        className="flex items-center space-x-3 p-2 rounded hover:bg-muted cursor-pointer"
+                        onClick={() => toggleContact(contact.id)}
+                      >
+                        <Checkbox
+                          checked={selectedContactIds.includes(contact.id)}
+                          onCheckedChange={() => toggleContact(contact.id)}
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{contact.first_name} {contact.last_name}</p>
+                          <p className="text-xs text-muted-foreground">{contact.email}</p>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {contact.property_type || '-'}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </ScrollArea>
-
-            <div className="text-sm text-muted-foreground">
-              {selectedContactIds.length} contact(s) selected
-            </div>
+                </ScrollArea>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {selectedContactIds.length} contact(s) selected
+                </p>
+              </TabsContent>
+            </Tabs>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setIsManageMembersOpen(false); setSelectedContactIds([]); setFilters({}); }}>
@@ -605,7 +615,7 @@ export function AudiencesPage() {
             </Button>
             <Button onClick={handleManageMembers} disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Save Members
+              Update Members ({selectedContactIds.length})
             </Button>
           </DialogFooter>
         </DialogContent>
