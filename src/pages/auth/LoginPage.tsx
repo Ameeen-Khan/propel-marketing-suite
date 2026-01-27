@@ -143,17 +143,6 @@ export function LoginPage() {
                 )}
               </Button>
             </form>
-
-            {/* Demo credentials hint */}
-            <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-              <p className="text-xs text-muted-foreground mb-2 font-medium">Demo credentials:</p>
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p><span className="font-mono">super@demo.com</span> — Super Admin</p>
-                <p><span className="font-mono">admin@demo.com</span> — Org Admin</p>
-                <p><span className="font-mono">user@demo.com</span> — Org User</p>
-                <p className="mt-1 italic">Any password works for demo</p>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

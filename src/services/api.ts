@@ -29,14 +29,28 @@ import {
   LoginResponse,
 } from '@/types';
 
-// Base API URL - will be configured for actual backend
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+// Base API URL - configured for backend
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 // Token management
 let authToken: string | null = null;
 
 export const setAuthToken = (token: string | null) => {
   authToken = token;
+  // Store token in localStorage for persistence
+  if (token) {
+    localStorage.setItem('auth_token', token);
+  } else {
+    localStorage.removeItem('auth_token');
+  }
+};
+
+// Initialize token from localStorage on app start
+export const initializeAuth = () => {
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    authToken = token;
+  }
 };
 
 // Generic fetch wrapper
@@ -91,120 +105,200 @@ function buildQueryString(params: PaginationParams): string {
 
 // Auth API
 export const authApi = {
-  login: (credentials: LoginCredentials) =>
-    apiFetch<LoginResponse>('/auth/login', {
+  // Super Admin login
+  superAdminLogin: (credentials: LoginCredentials) =>
+    apiFetch<LoginResponse>('/auth/superadmin/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
     }),
 
-  logout: () =>
-    apiFetch<void>('/auth/logout', {
+  // Organization Admin/User login
+  orgAdminLogin: (credentials: LoginCredentials) =>
+    apiFetch<LoginResponse>('/auth/orgadmin/login', {
       method: 'POST',
+      body: JSON.stringify(credentials),
     }),
 
-  me: () => apiFetch<LoginResponse>('/auth/me'),
+  // Generic login - tries org admin first, then super admin
+  login: async (credentials: LoginCredentials) => {
+    // Try org admin login first (most common)
+    const orgResponse = await apiFetch<LoginResponse>('/auth/orgadmin/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+
+    if (orgResponse.success) {
+      return orgResponse;
+    }
+
+    // If org admin login fails, try super admin
+    return apiFetch<LoginResponse>('/auth/superadmin/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+  },
+
+  // Password activation (for new users with invite token)
+  activatePassword: (token: string, password: string) =>
+    apiFetch<{ message: string }>('/auth/activate', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    }),
+
+  // Logout (client-side only for now)
+  logout: () => {
+    setAuthToken(null);
+    return Promise.resolve({ success: true, data: undefined });
+  },
+
+  // Get current user info from token (client-side decode)
+  me: () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      return Promise.resolve({
+        success: false,
+        message: 'Not authenticated'
+      });
+    }
+
+    // For now, return success - in production, you'd decode the JWT
+    // or make a backend call to verify the token
+    return Promise.resolve({
+      success: true,
+      data: { token } as LoginResponse
+    });
+  },
 };
 
 // Organizations API (Super Admin)
 export const organizationsApi = {
   list: (params: PaginationParams) =>
-    apiFetch<PaginatedResponse<Organization>>(`/organizations?${buildQueryString(params)}`),
+    apiFetch<PaginatedResponse<Organization>>(`/superadmin/orgs?${buildQueryString(params)}`),
 
   get: (id: string) =>
-    apiFetch<Organization>(`/organizations/${id}`),
+    apiFetch<Organization>(`/superadmin/orgs/${id}`),
 
   create: (payload: CreateOrganizationPayload) =>
-    apiFetch<Organization>('/organizations', {
+    apiFetch<Organization>('/superadmin/orgs', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 
   update: (id: string, payload: UpdateOrganizationPayload) =>
-    apiFetch<Organization>(`/organizations/${id}`, {
-      method: 'PATCH',
+    apiFetch<Organization>(`/superadmin/orgs/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(payload),
     }),
 
   activate: (id: string) =>
-    apiFetch<Organization>(`/organizations/${id}/activate`, {
+    apiFetch<Organization>(`/superadmin/orgs/${id}/activate`, {
       method: 'POST',
     }),
 
   deactivate: (id: string) =>
-    apiFetch<Organization>(`/organizations/${id}/deactivate`, {
+    apiFetch<Organization>(`/superadmin/orgs/${id}/deactivate`, {
       method: 'POST',
     }),
 };
 
 // Agents API
 export const agentsApi = {
+  // List agents - uses different endpoints based on role
   list: (params: PaginationParams, organizationId?: string) => {
     const query = buildQueryString(params);
-    const endpoint = organizationId
-      ? `/organizations/${organizationId}/agents?${query}`
-      : `/agents?${query}`;
-    return apiFetch<PaginatedResponse<Agent>>(endpoint);
+    // If organizationId is provided, use superadmin route
+    if (organizationId) {
+      return apiFetch<PaginatedResponse<Agent>>(`/superadmin/orgs/${organizationId}/agents?${query}`);
+    }
+    // Otherwise use orgadmin route
+    return apiFetch<PaginatedResponse<Agent>>(`/orgadmin/agents?${query}`);
   },
 
-  get: (id: string) =>
-    apiFetch<Agent>(`/agents/${id}`),
+  get: (id: string, organizationId?: string) => {
+    if (organizationId) {
+      return apiFetch<Agent>(`/superadmin/orgs/${organizationId}/agents/${id}`);
+    }
+    return apiFetch<Agent>(`/orgadmin/agents/${id}`);
+  },
 
   create: (payload: CreateAgentPayload, organizationId?: string) => {
-    const endpoint = organizationId
-      ? `/organizations/${organizationId}/agents`
-      : '/agents';
-    return apiFetch<Agent>(endpoint, {
+    if (organizationId) {
+      return apiFetch<Agent>(`/superadmin/orgs/${organizationId}/agents`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    }
+    return apiFetch<Agent>('/orgadmin/agents', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   },
 
-  update: (id: string, payload: UpdateAgentPayload) =>
-    apiFetch<Agent>(`/agents/${id}`, {
-      method: 'PATCH',
+  update: (id: string, payload: UpdateAgentPayload, organizationId?: string) => {
+    if (organizationId) {
+      return apiFetch<Agent>(`/superadmin/orgs/${organizationId}/agents/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    }
+    return apiFetch<Agent>(`/orgadmin/agents/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(payload),
-    }),
+    });
+  },
 
-  deactivate: (id: string) =>
-    apiFetch<Agent>(`/agents/${id}/deactivate`, {
-      method: 'POST',
-    }),
+  deactivate: (id: string, organizationId?: string) => {
+    if (organizationId) {
+      return apiFetch<Agent>(`/superadmin/orgs/${organizationId}/agents/${id}`, {
+        method: 'DELETE',
+      });
+    }
+    return apiFetch<Agent>(`/orgadmin/agents/${id}`, {
+      method: 'DELETE',
+    });
+  },
 
-  resendInvite: (id: string) =>
-    apiFetch<void>(`/agents/${id}/resend-invite`, {
+  resendInvite: (id: string, organizationId?: string) => {
+    if (organizationId) {
+      return apiFetch<void>(`/superadmin/orgs/${organizationId}/agents/${id}/regenerate-invite`, {
+        method: 'POST',
+      });
+    }
+    return apiFetch<void>(`/orgadmin/agents/${id}/regenerate-invite`, {
       method: 'POST',
-    }),
+    });
+  },
 };
 
-// Contacts API
+// Contacts API (Agent routes)
 export const contactsApi = {
   list: (params: PaginationParams) =>
-    apiFetch<PaginatedResponse<Contact>>(`/contacts?${buildQueryString(params)}`),
+    apiFetch<PaginatedResponse<Contact>>(`/agent/contacts?${buildQueryString(params)}`),
 
   get: (id: string) =>
-    apiFetch<Contact>(`/contacts/${id}`),
+    apiFetch<Contact>(`/agent/contacts/${id}`),
 
   create: (payload: CreateContactPayload) =>
-    apiFetch<Contact>('/contacts', {
+    apiFetch<Contact>('/agent/contacts', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 
   update: (id: string, payload: UpdateContactPayload) =>
-    apiFetch<Contact>(`/contacts/${id}`, {
+    apiFetch<Contact>(`/agent/contacts/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
 
   delete: (id: string) =>
-    apiFetch<void>(`/contacts/${id}`, {
+    apiFetch<void>(`/agent/contacts/${id}`, {
       method: 'DELETE',
     }),
 
   importCSV: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return apiFetch<CSVImportJob>('/contacts/import', {
+    return apiFetch<CSVImportJob>('/agent/contacts/import', {
       method: 'POST',
       headers: {}, // Let browser set content-type for FormData
       body: formData as unknown as string,
@@ -212,128 +306,128 @@ export const contactsApi = {
   },
 
   getImportStatus: (jobId: string) =>
-    apiFetch<CSVImportJob>(`/contacts/import/${jobId}`),
+    apiFetch<CSVImportJob>(`/agent/contacts/import/${jobId}`),
 
   listImports: (params: PaginationParams) =>
-    apiFetch<PaginatedResponse<CSVImportJob>>(`/contacts/imports?${buildQueryString(params)}`),
+    apiFetch<PaginatedResponse<CSVImportJob>>(`/agent/contacts/imports?${buildQueryString(params)}`),
 };
 
-// Audiences API
+// Audiences API (Agent routes)
 export const audiencesApi = {
   list: (params: PaginationParams) =>
-    apiFetch<PaginatedResponse<Audience>>(`/audiences?${buildQueryString(params)}`),
+    apiFetch<PaginatedResponse<Audience>>(`/agent/audiences?${buildQueryString(params)}`),
 
   get: (id: string) =>
-    apiFetch<Audience>(`/audiences/${id}`),
+    apiFetch<Audience>(`/agent/audiences/${id}`),
 
   create: (payload: CreateAudiencePayload) =>
-    apiFetch<Audience>('/audiences', {
+    apiFetch<Audience>('/agent/audiences', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 
   update: (id: string, payload: UpdateAudiencePayload) =>
-    apiFetch<Audience>(`/audiences/${id}`, {
+    apiFetch<Audience>(`/agent/audiences/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
 
   delete: (id: string) =>
-    apiFetch<void>(`/audiences/${id}`, {
+    apiFetch<void>(`/agent/audiences/${id}`, {
       method: 'DELETE',
     }),
 
   assignContacts: (id: string, payload: AssignContactsPayload) =>
-    apiFetch<Audience>(`/audiences/${id}/contacts`, {
+    apiFetch<Audience>(`/agent/audiences/${id}/contacts`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 
   getContacts: (id: string, params: PaginationParams) =>
-    apiFetch<PaginatedResponse<Contact>>(`/audiences/${id}/contacts?${buildQueryString(params)}`),
+    apiFetch<PaginatedResponse<Contact>>(`/agent/audiences/${id}/contacts?${buildQueryString(params)}`),
 };
 
-// Email Templates API
+// Email Templates API (Agent routes)
 export const emailTemplatesApi = {
   list: (params: PaginationParams) =>
-    apiFetch<PaginatedResponse<EmailTemplate>>(`/email-templates?${buildQueryString(params)}`),
+    apiFetch<PaginatedResponse<EmailTemplate>>(`/agent/email-templates?${buildQueryString(params)}`),
 
   get: (id: string) =>
-    apiFetch<EmailTemplate>(`/email-templates/${id}`),
+    apiFetch<EmailTemplate>(`/agent/email-templates/${id}`),
 
   create: (payload: CreateEmailTemplatePayload) =>
-    apiFetch<EmailTemplate>('/email-templates', {
+    apiFetch<EmailTemplate>('/agent/email-templates', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 
   update: (id: string, payload: UpdateEmailTemplatePayload) =>
-    apiFetch<EmailTemplate>(`/email-templates/${id}`, {
+    apiFetch<EmailTemplate>(`/agent/email-templates/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
 
   delete: (id: string) =>
-    apiFetch<void>(`/email-templates/${id}`, {
+    apiFetch<void>(`/agent/email-templates/${id}`, {
       method: 'DELETE',
     }),
 
   testSend: (id: string, payload: TestSendPayload) =>
-    apiFetch<void>(`/email-templates/${id}/test`, {
+    apiFetch<void>(`/agent/email-templates/${id}/test-send`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 };
 
-// Campaigns API
+// Campaigns API (Agent routes)
 export const campaignsApi = {
   list: (params: PaginationParams) =>
-    apiFetch<PaginatedResponse<Campaign>>(`/campaigns?${buildQueryString(params)}`),
+    apiFetch<PaginatedResponse<Campaign>>(`/agent/campaigns?${buildQueryString(params)}`),
 
   get: (id: string) =>
-    apiFetch<Campaign>(`/campaigns/${id}`),
+    apiFetch<Campaign>(`/agent/campaigns/${id}`),
 
   create: (payload: CreateCampaignPayload) =>
-    apiFetch<Campaign>('/campaigns', {
+    apiFetch<Campaign>('/agent/campaigns', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 
   update: (id: string, payload: UpdateCampaignPayload) =>
-    apiFetch<Campaign>(`/campaigns/${id}`, {
+    apiFetch<Campaign>(`/agent/campaigns/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
 
   pause: (id: string) =>
-    apiFetch<Campaign>(`/campaigns/${id}/pause`, {
+    apiFetch<Campaign>(`/agent/campaigns/${id}/pause`, {
       method: 'POST',
     }),
 
   resume: (id: string) =>
-    apiFetch<Campaign>(`/campaigns/${id}/resume`, {
+    apiFetch<Campaign>(`/agent/campaigns/${id}/resume`, {
       method: 'POST',
     }),
 
   getLogs: (id: string, params: PaginationParams) =>
-    apiFetch<PaginatedResponse<CampaignLog>>(`/campaigns/${id}/logs?${buildQueryString(params)}`),
+    apiFetch<PaginatedResponse<CampaignLog>>(`/agent/campaigns/${id}/logs?${buildQueryString(params)}`),
 };
 
-// Notifications API
+// Notifications API (Agent routes)
 export const notificationsApi = {
   list: (params: PaginationParams) =>
-    apiFetch<PaginatedResponse<Notification>>(`/notifications?${buildQueryString(params)}`),
+    apiFetch<PaginatedResponse<Notification>>(`/agent/notifications?${buildQueryString(params)}`),
 
   markRead: (id: string) =>
-    apiFetch<Notification>(`/notifications/${id}/read`, {
+    apiFetch<Notification>(`/agent/notifications/${id}/read`, {
       method: 'POST',
     }),
 
   markAllRead: () =>
-    apiFetch<void>('/notifications/read-all', {
+    apiFetch<void>('/agent/notifications/read-all', {
       method: 'POST',
     }),
 
   getUnreadCount: () =>
-    apiFetch<{ count: number }>('/notifications/unread-count'),
+    apiFetch<{ count: number }>('/agent/notifications/unread-count'),
 };
