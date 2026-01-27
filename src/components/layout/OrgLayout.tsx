@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users,
   Mail,
@@ -69,12 +70,18 @@ export function OrgLayout() {
   return (
     <div className="min-h-screen bg-background flex w-full">
       {/* Mobile sidebar backdrop */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Sidebar */}
       <aside
@@ -107,25 +114,49 @@ export function OrgLayout() {
             </Button>
           </div>
 
+
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-1">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                className={({ isActive }) =>
-                  cn(
-                    "org-nav-item",
-                    isActive ? "org-nav-item-active" : "org-nav-item-inactive"
-                  )
+          <motion.nav
+            className="flex-1 p-4 space-y-1"
+            initial="hidden"
+            animate="visible"
+            variants={{
+              hidden: { opacity: 0 },
+              visible: {
+                opacity: 1,
+                transition: {
+                  staggerChildren: 0.05,
+                  delayChildren: 0.1
                 }
-                onClick={() => setSidebarOpen(false)}
+              }
+            }}
+          >
+            {navigation.map((item, index) => (
+              <motion.div
+                key={item.name}
+                variants={{
+                  hidden: { opacity: 0, x: -10 },
+                  visible: { opacity: 1, x: 0 }
+                }}
+                whileHover={{ x: 4 }}
+                transition={{ duration: 0.15 }}
               >
-                <item.icon className="w-5 h-5" />
-                {item.name}
-              </NavLink>
+                <NavLink
+                  to={item.href}
+                  className={({ isActive }) =>
+                    cn(
+                      "org-nav-item",
+                      isActive ? "org-nav-item-active" : "org-nav-item-inactive"
+                    )
+                  }
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <item.icon className="w-5 h-5" />
+                  {item.name}
+                </NavLink>
+              </motion.div>
             ))}
-          </nav>
+          </motion.nav>
 
           {/* User menu */}
           <div className="p-4 border-t border-org-sidebar-border">
@@ -201,33 +232,51 @@ export function OrgLayout() {
                     No notifications
                   </div>
                 ) : (
-                  notifications.map((notification) => (
-                    <div
-                      key={notification.id}
-                      className={cn(
-                        "p-4 border-b last:border-b-0 hover:bg-muted/50 cursor-pointer transition-colors",
-                        !notification.read && "bg-primary/5"
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={cn(
-                            "w-2 h-2 mt-2 rounded-full flex-shrink-0",
-                            notification.read ? "bg-muted-foreground/30" : "bg-primary"
-                          )}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium">{notification.title}</p>
-                          <p className="text-sm text-muted-foreground truncate">
-                            {notification.message}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {notification.time}
-                          </p>
+                  <motion.div
+                    initial="hidden"
+                    animate="visible"
+                    variants={{
+                      hidden: { opacity: 0 },
+                      visible: {
+                        opacity: 1,
+                        transition: {
+                          staggerChildren: 0.05
+                        }
+                      }
+                    }}
+                  >
+                    {notifications.map((notification) => (
+                      <motion.div
+                        key={notification.id}
+                        variants={{
+                          hidden: { opacity: 0, x: -10 },
+                          visible: { opacity: 1, x: 0 }
+                        }}
+                        className={cn(
+                          "p-4 border-b last:border-b-0 hover:bg-muted/50 cursor-pointer transition-colors",
+                          !notification.read && "bg-primary/5"
+                        )}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={cn(
+                              "w-2 h-2 mt-2 rounded-full flex-shrink-0",
+                              notification.read ? "bg-muted-foreground/30" : "bg-primary"
+                            )}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">{notification.title}</p>
+                            <p className="text-sm text-muted-foreground truncate">
+                              {notification.message}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {notification.time}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))
+                      </motion.div>
+                    ))}
+                  </motion.div>
                 )}
               </div>
               <div className="p-2 border-t">

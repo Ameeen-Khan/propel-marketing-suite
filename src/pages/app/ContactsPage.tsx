@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
+import { motion } from 'framer-motion';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { Contact } from '@/types';
+import { Badge } from '@/components/ui/badge';
 import {
   Plus,
   MoreHorizontal,
@@ -34,6 +36,8 @@ import {
   Trash2,
   Upload,
   Loader2,
+  X,
+  Filter,
 } from 'lucide-react';
 import { z } from 'zod';
 
@@ -58,6 +62,12 @@ const mockContacts: Contact[] = [
   { id: '3', first_name: 'Carol', last_name: 'Davis', email: 'carol@email.com', phone: '+1-555-0103', property_type: 'Apartment', budget_min: 150000, budget_max: 250000, bedrooms: 1, bathrooms: 1, square_feet: 800, preferred_location: 'City Center', created_at: '2024-03-20' },
   { id: '4', first_name: 'David', last_name: 'Wilson', email: 'david@email.com', phone: '+1-555-0104', property_type: 'House', budget_min: 500000, budget_max: 800000, bedrooms: 4, bathrooms: 3, square_feet: 3500, preferred_location: 'Waterfront', created_at: '2024-04-05' },
 ];
+
+// Animation variant for form fields
+const formFieldVariant = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0 }
+};
 
 export function ContactsPage() {
   const { toast } = useToast();
@@ -91,22 +101,62 @@ export function ContactsPage() {
     preferred_location: '',
   });
 
+  // Quick filters state
+  const [propertyTypeFilter, setPropertyTypeFilter] = useState<string>('');
+  const [locationFilter, setLocationFilter] = useState<string>('');
+
   useEffect(() => {
     fetchContacts();
-  }, [page, limit, search]);
+  }, [page, limit, search, propertyTypeFilter, locationFilter]);
+
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+N or Cmd+N for new contact
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        resetForm();
+        setIsCreateOpen(true);
+      }
+      // Escape to close modals
+      if (e.key === 'Escape') {
+        setIsCreateOpen(false);
+        setIsEditOpen(false);
+        setIsDeleteOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+
 
   const fetchContacts = async () => {
     setIsLoading(true);
     await new Promise(resolve => setTimeout(resolve, 500));
-    
+
     let filtered = [...mockContacts];
+
+    // Apply search filter
     if (search) {
       filtered = filtered.filter(contact =>
         `${contact.first_name} ${contact.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
         contact.email.toLowerCase().includes(search.toLowerCase())
       );
     }
-    
+
+    // Apply property type filter
+    if (propertyTypeFilter) {
+      filtered = filtered.filter(contact => contact.property_type === propertyTypeFilter);
+    }
+
+    // Apply location filter
+    if (locationFilter) {
+      filtered = filtered.filter(contact => contact.preferred_location === locationFilter);
+    }
+
     setTotal(filtered.length);
     setContacts(filtered.slice((page - 1) * limit, page * limit));
     setIsLoading(false);
@@ -157,7 +207,7 @@ export function ContactsPage() {
 
     setIsSubmitting(true);
     await new Promise(resolve => setTimeout(resolve, 500));
-    
+
     toast({ title: 'Contact created', description: `${formData.first_name} ${formData.last_name} has been added.` });
     setIsCreateOpen(false);
     resetForm();
@@ -168,7 +218,7 @@ export function ContactsPage() {
   const handleEdit = async () => {
     if (!selectedContact) return;
     setFormErrors({});
-    
+
     const payload = {
       first_name: formData.first_name,
       last_name: formData.last_name,
@@ -195,7 +245,7 @@ export function ContactsPage() {
 
     setIsSubmitting(true);
     await new Promise(resolve => setTimeout(resolve, 500));
-    
+
     toast({ title: 'Contact updated', description: 'Contact details have been updated.' });
     setIsEditOpen(false);
     setSelectedContact(null);
@@ -208,7 +258,7 @@ export function ContactsPage() {
     if (!selectedContact) return;
     setIsSubmitting(true);
     await new Promise(resolve => setTimeout(resolve, 500));
-    
+
     toast({ title: 'Contact deleted', description: `${selectedContact.first_name} ${selectedContact.last_name} has been removed.` });
     setIsDeleteOpen(false);
     setSelectedContact(null);
@@ -219,12 +269,12 @@ export function ContactsPage() {
   const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     toast({
       title: 'Import started',
       description: `Processing ${file.name}...`,
     });
-    
+
     // Reset the input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -347,6 +397,63 @@ export function ContactsPage() {
         }
       />
 
+      {/* Quick Filters */}
+      <motion.div 
+        className="mb-4 flex flex-wrap items-center gap-2"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Filter className="w-4 h-4" />
+          <span className="font-medium">Quick Filters:</span>
+        </div>
+        
+        {/* Property Type Filters */}
+        {['House', 'Condo', 'Apartment', 'Townhouse'].map((type) => (
+          <Badge
+            key={type}
+            variant={propertyTypeFilter === type ? 'default' : 'outline'}
+            className="cursor-pointer transition-all hover:scale-105"
+            onClick={() => setPropertyTypeFilter(propertyTypeFilter === type ? '' : type)}
+          >
+            {type}
+            {propertyTypeFilter === type && (
+              <X className="w-3 h-3 ml-1" onClick={(e) => { e.stopPropagation(); setPropertyTypeFilter(''); }} />
+            )}
+          </Badge>
+        ))}
+
+        <div className="w-px h-4 bg-border" />
+
+        {/* Location Filters */}
+        {['Downtown', 'Suburbs', 'City Center', 'Waterfront'].map((location) => (
+          <Badge
+            key={location}
+            variant={locationFilter === location ? 'default' : 'secondary'}
+            className="cursor-pointer transition-all hover:scale-105"
+            onClick={() => setLocationFilter(locationFilter === location ? '' : location)}
+          >
+            {location}
+            {locationFilter === location && (
+              <X className="w-3 h-3 ml-1" onClick={(e) => { e.stopPropagation(); setLocationFilter(''); }} />
+            )}
+          </Badge>
+        ))}
+
+        {/* Clear All */}
+        {(propertyTypeFilter || locationFilter) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => { setPropertyTypeFilter(''); setLocationFilter(''); }}
+          >
+            Clear all
+          </Button>
+        )}
+      </motion.div>
+
       <DataTable
         columns={columns}
         data={contacts}
@@ -378,8 +485,22 @@ export function ContactsPage() {
               {isEditOpen ? 'Update contact details.' : 'Add a new contact to your list.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
-            <div className="space-y-2">
+          <motion.div
+            className="grid grid-cols-2 gap-4 py-4"
+            initial="hidden"
+            animate="visible"
+            variants={{
+              hidden: { opacity: 0 },
+              visible: {
+                opacity: 1,
+                transition: {
+                  staggerChildren: 0.05,
+                  delayChildren: 0.1
+                }
+              }
+            }}
+          >
+            <motion.div className="space-y-2" variants={formFieldVariant}>
               <Label htmlFor="first_name">First Name *</Label>
               <Input
                 id="first_name"
@@ -388,8 +509,8 @@ export function ContactsPage() {
                 className={formErrors.first_name ? 'border-destructive' : ''}
               />
               {formErrors.first_name && <p className="text-sm text-destructive">{formErrors.first_name}</p>}
-            </div>
-            <div className="space-y-2">
+            </motion.div>
+            <motion.div className="space-y-2" variants={formFieldVariant}>
               <Label htmlFor="last_name">Last Name *</Label>
               <Input
                 id="last_name"
@@ -398,7 +519,7 @@ export function ContactsPage() {
                 className={formErrors.last_name ? 'border-destructive' : ''}
               />
               {formErrors.last_name && <p className="text-sm text-destructive">{formErrors.last_name}</p>}
-            </div>
+            </motion.div>
             <div className="space-y-2">
               <Label htmlFor="email">Email *</Label>
               <Input
@@ -438,11 +559,24 @@ export function ContactsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="preferred_location">Preferred Location</Label>
-              <Input
-                id="preferred_location"
+              <Select
                 value={formData.preferred_location}
-                onChange={(e) => setFormData({ ...formData, preferred_location: e.target.value })}
-              />
+                onValueChange={(value) => setFormData({ ...formData, preferred_location: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select location" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Downtown">Downtown</SelectItem>
+                  <SelectItem value="Suburbs">Suburbs</SelectItem>
+                  <SelectItem value="City Center">City Center</SelectItem>
+                  <SelectItem value="Waterfront">Waterfront</SelectItem>
+                  <SelectItem value="Uptown">Uptown</SelectItem>
+                  <SelectItem value="Midtown">Midtown</SelectItem>
+                  <SelectItem value="Beachfront">Beachfront</SelectItem>
+                  <SelectItem value="Rural Area">Rural Area</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="budget_min">Budget Min ($)</Label>
@@ -489,7 +623,7 @@ export function ContactsPage() {
                 onChange={(e) => setFormData({ ...formData, square_feet: e.target.value })}
               />
             </div>
-          </div>
+          </motion.div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setIsCreateOpen(false); setIsEditOpen(false); resetForm(); }}>
               Cancel
