@@ -41,6 +41,8 @@ import {
   Calendar,
 } from 'lucide-react';
 import { z } from 'zod';
+import { campaignsApi, emailTemplatesApi, audiencesApi } from '@/services/api';
+import { CampaignLogsViewer } from './CampaignLogsViewer';
 
 const campaignSchema = z.object({
   name: z.string().min(1, 'Campaign name is required').max(100),
@@ -48,33 +50,26 @@ const campaignSchema = z.object({
   audience_ids: z.array(z.string()).min(1, 'At least one audience is required'),
   schedule_type: z.enum(['once', 'recurring']),
   scheduled_at: z.string().optional(),
-  recurrence_mode: z.enum(['daily', 'weekly', 'monthly']).optional(),
+  recurrence_mode: z.enum(['daily', 'weekly', 'monthly']).or(z.literal('')).optional(),
   recurrence_time: z.string().optional(),
 });
 
-// Mock data
-const mockCampaigns: Campaign[] = [
-  { id: '1', name: 'Welcome Series', template_id: '1', template_name: 'Welcome Email', audience_ids: ['1'], audience_names: ['New Leads'], recipients: 150, schedule_type: 'once', scheduled_at: '2024-04-15T10:00:00Z', status: 'completed', created_at: '2024-04-10', updated_at: '2024-04-15' },
-  { id: '2', name: 'Weekly Newsletter', template_id: '3', template_name: 'Monthly Newsletter', audience_ids: ['2'], audience_names: ['All Contacts'], recipients: 500, schedule_type: 'recurring', recurrence: { mode: 'weekly', time: '09:00', day_of_week: 1 }, status: 'running', created_at: '2024-03-01', updated_at: '2024-04-20' },
-  { id: '3', name: 'New Listing Alert', template_id: '2', template_name: 'New Listing Alert', audience_ids: ['3'], audience_names: ['Buyers'], recipients: 200, schedule_type: 'once', scheduled_at: '2024-04-25T14:00:00Z', status: 'scheduled', created_at: '2024-04-18', updated_at: '2024-04-18' },
-  { id: '4', name: 'Monthly Market Update', template_id: '3', template_name: 'Monthly Newsletter', audience_ids: ['2', '3'], audience_names: ['All Contacts', 'Buyers'], recipients: 700, schedule_type: 'recurring', recurrence: { mode: 'monthly', time: '10:00', day_of_month: 1 }, status: 'paused', created_at: '2024-02-01', updated_at: '2024-04-01' },
-];
-
-const mockTemplates = [
-  { id: '1', name: 'Welcome Email' },
-  { id: '2', name: 'New Listing Alert' },
-  { id: '3', name: 'Monthly Newsletter' },
-];
-
-const mockAudiences = [
-  { id: '1', name: 'New Leads', contact_count: 150 },
-  { id: '2', name: 'All Contacts', contact_count: 500 },
-  { id: '3', name: 'Buyers', contact_count: 200 },
-];
+// Helper function to get ordinal suffix (1st, 2nd, 3rd, etc.)
+const getOrdinalSuffix = (day: number): string => {
+  if (day > 3 && day < 21) return 'th';
+  switch (day % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+};
 
 export function CampaignsPage() {
   const { toast } = useToast();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [templates, setTemplates] = useState<{ id: string; name: string }[]>([]);
+  const [audiences, setAudiences] = useState<{ id: string; name: string; contact_count: number }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -97,26 +92,167 @@ export function CampaignsPage() {
     scheduled_at: '',
     recurrence_mode: '' as RecurrenceMode | '',
     recurrence_time: '',
+    recurrence_day_of_week: 1, // Monday by default
+    recurrence_day_of_month: 1, // 1st of month by default
   });
 
   useEffect(() => {
-    fetchCampaigns();
+    const loadData = async () => {
+      // Fetch templates and audiences first, then campaigns
+      await Promise.all([fetchTemplates(), fetchAudiences()]);
+      await fetchCampaigns();
+    };
+    loadData();
   }, [page, limit, search]);
+
+  const fetchTemplates = async () => {
+    try {
+      const response = await emailTemplatesApi.list({ page: 1, limit: 100 });
+      console.log('CampaignsPage - Templates Response:', response); // DEBUG LOG
+
+      if (response.success && response.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const responseData = response.data as any;
+        const templatesData = responseData.templates || responseData.data || (Array.isArray(responseData) ? responseData : []);
+
+        // Normalize 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const normalized = templatesData.map((t: any) => ({
+          id: t.id || t.ID,
+          name: t.name || t.Name
+        }));
+
+        setTemplates(normalized);
+      }
+    } catch (error) {
+      console.error('Failed to fetch templates:', error);
+    }
+  };
+
+  const fetchAudiences = async () => {
+    try {
+      const response = await audiencesApi.list({ page: 1, limit: 100 });
+      console.log('CampaignsPage - Audiences Response:', response); // DEBUG LOG
+
+      if (response.success && response.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const responseData = response.data as any;
+        const audiencesData = responseData.audiences || responseData.data || (Array.isArray(responseData) ? responseData : []);
+
+        // Normalize
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const normalized = audiencesData.map((a: any) => ({
+          id: a.id || a.ID,
+          name: a.name || a.Name,
+          contact_count: a.contact_count !== undefined ? a.contact_count : (a.ContactCount !== undefined ? a.ContactCount : 0)
+        }));
+
+        setAudiences(normalized);
+      }
+    } catch (error) {
+      console.error('Failed to fetch audiences:', error);
+    }
+  };
 
   const fetchCampaigns = async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    let filtered = [...mockCampaigns];
-    if (search) {
-      filtered = filtered.filter(campaign =>
-        campaign.name.toLowerCase().includes(search.toLowerCase())
-      );
+    try {
+      const response = await campaignsApi.list({
+        page,
+        limit,
+        search,
+        sort_by: 'created_at',
+        sort_order: 'desc'
+      });
+
+      console.log('CampaignsPage - Campaigns Response:', response);
+
+      if (response && response.success && response.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const responseData = response.data as any;
+        const campaignsData = responseData.campaigns || responseData.data || (Array.isArray(responseData) ? responseData : []);
+
+        // Normalize
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const normalized = campaignsData.map((c: any) => {
+          // Backend now returns recurrence as a string ("daily", "weekly", "monthly")
+          const recurrence = c.recurrence || c.Recurrence;
+          const scheduledAt = c.scheduled_at || c.ScheduledAt;
+
+          // Extract time from scheduled_at for display (convert UTC to local time)
+          let recurrenceTime = '';
+          if (scheduledAt && typeof scheduledAt === 'string') {
+            const date = new Date(scheduledAt);
+            // Use toLocaleTimeString to get local time in HH:MM format
+            recurrenceTime = date.toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false
+            });
+          }
+
+          // Build recurrence object for display (if it's a recurring campaign)
+          const normalizedRecurrence = recurrence && typeof recurrence === 'string' ? {
+            mode: recurrence,
+            time: recurrenceTime,
+            day_of_week: c.recurrence_day_of_week || c.RecurrenceDayOfWeek,
+            day_of_month: c.recurrence_day_of_month || c.RecurrenceDayOfMonth,
+          } : undefined;
+
+          // Safely handle scheduled_at date string
+          let normalizedScheduledAt = scheduledAt;
+          if (normalizedScheduledAt && typeof normalizedScheduledAt === 'string') {
+            normalizedScheduledAt = normalizedScheduledAt.replace(/Z$/, '');
+          }
+
+          // Populate template name from templates list
+          const templateId = c.template_id || c.TemplateID || c.TemplateId;
+          const template = templates.find(t => t.id === templateId);
+          const templateName = template?.name || c.template_name || c.TemplateName || 'Unknown Template';
+
+          // Populate audience names and calculate recipients from audiences list
+          const audienceIds = c.audience_ids || c.AudienceIDs || c.AudienceIds || [];
+          const matchedAudiences = audiences.filter(a => audienceIds.includes(a.id));
+          const audienceNames = matchedAudiences.map(a => a.name);
+          const recipientsCount = matchedAudiences.reduce((sum, a) => sum + (a.contact_count || 0), 0);
+
+          return {
+            ...c,
+            id: c.id || c.ID,
+            name: c.name || c.Name,
+            status: (c.status || c.Status || 'draft').toLowerCase(),
+            template_id: templateId,
+            template_name: templateName,
+            audience_ids: audienceIds,
+            audience_names: audienceNames,
+            schedule_type: (c.schedule_type || c.ScheduleType || 'once').toLowerCase(),
+            scheduled_at: normalizedScheduledAt,
+            recurrence: normalizedRecurrence,
+            recipients: recipientsCount || c.recipients || c.Recipients || 0,
+            created_at: (c.created_at || c.CreatedAt || new Date().toISOString()).replace(/Z$/, ''),
+          };
+        });
+
+        setCampaigns(normalized);
+        setTotal(responseData.total || normalized.length || 0);
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to load campaigns',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load campaigns',
+        variant: 'destructive'
+      });
+      setCampaigns([]);
+      setTotal(0);
+    } finally {
+      setIsLoading(false);
     }
-    
-    setTotal(filtered.length);
-    setCampaigns(filtered.slice((page - 1) * limit, page * limit));
-    setIsLoading(false);
   };
 
   const resetForm = () => {
@@ -128,30 +264,93 @@ export function CampaignsPage() {
       scheduled_at: '',
       recurrence_mode: '',
       recurrence_time: '',
+      recurrence_day_of_week: 1,
+      recurrence_day_of_month: 1,
     });
     setFormErrors({});
   };
 
   const handleCreate = async () => {
+    console.log('handleCreate started');
     setFormErrors({});
     const result = campaignSchema.safeParse(formData);
+
+    // Custom validation for scheduled_at
+    if (formData.schedule_type === 'once' && !formData.scheduled_at) {
+      setFormErrors(prev => ({ ...prev, scheduled_at: 'Schedule time is required for one-time campaigns' }));
+      return;
+    }
+
     if (!result.success) {
+      console.log('Validation failed', result.error);
       const errors: Record<string, string> = {};
       result.error.errors.forEach((err) => {
         errors[err.path[0] as string] = err.message;
       });
-      setFormErrors(errors);
+      setFormErrors(prev => ({ ...prev, ...errors }));
       return;
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({ title: 'Campaign created', description: `${formData.name} has been created.` });
-    setIsCreateOpen(false);
-    resetForm();
-    fetchCampaigns();
-    setIsSubmitting(false);
+    try {
+      const payload: any = {
+        name: formData.name,
+        template_id: formData.template_id,
+        audience_ids: formData.audience_ids,
+        schedule_type: formData.schedule_type,
+      };
+
+      if (formData.schedule_type === 'once' && formData.scheduled_at) {
+        // Ensure ISO format with seconds if needed, but datetime-local is usually close enough. 
+        // Appending :00Z might be safer to ensure it's treated as UTC or just ISO
+        payload.scheduled_at = new Date(formData.scheduled_at).toISOString();
+      } else if (formData.schedule_type === 'recurring' && formData.recurrence_mode) {
+        // Backend expects recurrence as a string, not an object
+        payload.recurrence = formData.recurrence_mode;
+
+        // scheduled_at is required for recurring campaigns (time of day to run)
+        const scheduledTime = formData.recurrence_time || new Date().toTimeString().slice(0, 5);
+        const today = new Date().toISOString().split('T')[0]; // Get today's date
+        // Create date in local time, then convert to ISO (which will add timezone offset)
+        payload.scheduled_at = new Date(`${today}T${scheduledTime}:00`).toISOString();
+
+        // Add day_of_week for weekly recurrence (1 = Monday, 0 = Sunday)
+        if (formData.recurrence_mode === 'weekly') {
+          payload.recurrence_day_of_week = formData.recurrence_day_of_week;
+        }
+
+        // Add day_of_month for monthly recurrence
+        if (formData.recurrence_mode === 'monthly') {
+          payload.recurrence_day_of_month = formData.recurrence_day_of_month;
+        }
+      }
+
+      console.log('Sending Campaign Payload:', payload);
+      const response = await campaignsApi.create(payload);
+      console.log('Campaign Create Response:', response);
+
+      if (response.success) {
+        toast({ title: 'Campaign created', description: `${formData.name} has been created.` });
+        setIsCreateOpen(false);
+        resetForm();
+        fetchCampaigns();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to create campaign',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      console.error('Create error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to create campaign',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleEdit = async () => {
@@ -168,21 +367,86 @@ export function CampaignsPage() {
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({ title: 'Campaign updated', description: 'Campaign has been updated.' });
-    setIsEditOpen(false);
-    setSelectedCampaign(null);
-    resetForm();
-    fetchCampaigns();
-    setIsSubmitting(false);
+    try {
+      const payload: any = {
+        name: formData.name,
+        template_id: formData.template_id,
+        audience_ids: formData.audience_ids,
+        schedule_type: formData.schedule_type,
+      };
+
+      if (formData.schedule_type === 'once' && formData.scheduled_at) {
+        payload.scheduled_at = formData.scheduled_at;
+      } else if (formData.schedule_type === 'recurring' && formData.recurrence_mode) {
+        // Backend expects recurrence as a string, not an object
+        payload.recurrence = formData.recurrence_mode;
+
+        // scheduled_at is required for recurring campaigns (time of day to run)
+        const scheduledTime = formData.recurrence_time || new Date().toTimeString().slice(0, 5);
+        const today = new Date().toISOString().split('T')[0];
+        // Create date in local time, then convert to ISO
+        payload.scheduled_at = new Date(`${today}T${scheduledTime}:00`).toISOString();
+
+        // Add day_of_week for weekly recurrence
+        if (formData.recurrence_mode === 'weekly') {
+          payload.recurrence_day_of_week = formData.recurrence_day_of_week;
+        }
+
+        // Add day_of_month for monthly recurrence
+        if (formData.recurrence_mode === 'monthly') {
+          payload.recurrence_day_of_month = formData.recurrence_day_of_month;
+        }
+      }
+
+      const response = await campaignsApi.update(selectedCampaign.id, payload);
+      if (response.success) {
+        toast({ title: 'Campaign updated', description: 'Campaign has been updated.' });
+        setIsEditOpen(false);
+        setSelectedCampaign(null);
+        resetForm();
+        fetchCampaigns();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to update campaign',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update campaign',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handlePauseResume = async (campaign: Campaign) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const action = campaign.status === 'running' ? 'paused' : 'resumed';
-    toast({ title: `Campaign ${action}`, description: `${campaign.name} has been ${action}.` });
-    fetchCampaigns();
+    try {
+      const response = campaign.status === 'running'
+        ? await campaignsApi.pause(campaign.id)
+        : await campaignsApi.resume(campaign.id);
+
+      if (response.success) {
+        const action = campaign.status === 'running' ? 'paused' : 'resumed';
+        toast({ title: `Campaign ${action}`, description: `${campaign.name} has been ${action}.` });
+        fetchCampaigns();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to update campaign',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update campaign',
+        variant: 'destructive'
+      });
+    }
   };
 
   const openEdit = (campaign: Campaign) => {
@@ -195,6 +459,8 @@ export function CampaignsPage() {
       scheduled_at: campaign.scheduled_at || '',
       recurrence_mode: campaign.recurrence?.mode || '',
       recurrence_time: campaign.recurrence?.time || '',
+      recurrence_day_of_week: campaign.recurrence?.day_of_week || 1,
+      recurrence_day_of_month: campaign.recurrence?.day_of_month || 1,
     });
     setFormErrors({});
     setIsEditOpen(true);
@@ -228,34 +494,24 @@ export function CampaignsPage() {
       cell: (campaign) => <span className="font-medium">{campaign.name}</span>,
     },
     {
-      key: 'template',
-      header: 'Template',
-      cell: (campaign) => campaign.template_name,
-    },
-    {
-      key: 'audiences',
-      header: 'Audiences',
-      cell: (campaign) => (
-        <div className="flex flex-wrap gap-1">
-          {campaign.audience_names.map((name, i) => (
-            <Badge key={i} variant="secondary" className="text-xs">
-              {name}
-            </Badge>
-          ))}
-        </div>
-      ),
-    },
-    {
-      key: 'recipients',
-      header: 'Recipients',
-      cell: (campaign) => campaign.recipients.toLocaleString(),
-    },
-    {
       key: 'schedule',
       header: 'Schedule',
       cell: (campaign) => {
         if (campaign.schedule_type === 'recurring' && campaign.recurrence) {
-          return `${campaign.recurrence.mode} at ${campaign.recurrence.time}`;
+          const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          let scheduleText = campaign.recurrence.mode.charAt(0).toUpperCase() + campaign.recurrence.mode.slice(1);
+
+          if (campaign.recurrence.mode === 'weekly' && campaign.recurrence.day_of_week !== undefined) {
+            scheduleText += ` (${days[campaign.recurrence.day_of_week]})`;
+          } else if (campaign.recurrence.mode === 'monthly' && campaign.recurrence.day_of_month) {
+            scheduleText += ` (${campaign.recurrence.day_of_month}${getOrdinalSuffix(campaign.recurrence.day_of_month)})`;
+          }
+
+          if (campaign.recurrence.time) {
+            scheduleText += ` at ${campaign.recurrence.time}`;
+          }
+
+          return scheduleText;
         }
         if (campaign.scheduled_at) {
           return new Date(campaign.scheduled_at).toLocaleString();
@@ -379,7 +635,7 @@ export function CampaignsPage() {
                   <SelectValue placeholder="Select template" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockTemplates.map((template) => (
+                  {templates.map((template) => (
                     <SelectItem key={template.id} value={template.id}>
                       {template.name}
                     </SelectItem>
@@ -392,7 +648,7 @@ export function CampaignsPage() {
             <div className="space-y-2">
               <Label>Target Audiences *</Label>
               <div className="border rounded-md p-3 space-y-2">
-                {mockAudiences.map((audience) => (
+                {audiences.map((audience) => (
                   <label
                     key={audience.id}
                     className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
@@ -437,7 +693,9 @@ export function CampaignsPage() {
                   type="datetime-local"
                   value={formData.scheduled_at}
                   onChange={(e) => setFormData({ ...formData, scheduled_at: e.target.value })}
+                  className={formErrors.scheduled_at ? 'border-destructive' : ''}
                 />
+                {formErrors.scheduled_at && <p className="text-sm text-destructive">{formErrors.scheduled_at}</p>}
               </div>
             )}
 
@@ -459,6 +717,44 @@ export function CampaignsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {formData.recurrence_mode === 'weekly' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="recurrence_day_of_week">Day of Week</Label>
+                    <Select
+                      value={formData.recurrence_day_of_week.toString()}
+                      onValueChange={(value) => setFormData({ ...formData, recurrence_day_of_week: parseInt(value) })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">Sunday</SelectItem>
+                        <SelectItem value="1">Monday</SelectItem>
+                        <SelectItem value="2">Tuesday</SelectItem>
+                        <SelectItem value="3">Wednesday</SelectItem>
+                        <SelectItem value="4">Thursday</SelectItem>
+                        <SelectItem value="5">Friday</SelectItem>
+                        <SelectItem value="6">Saturday</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {formData.recurrence_mode === 'monthly' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="recurrence_day_of_month">Day of Month</Label>
+                    <Input
+                      id="recurrence_day_of_month"
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={formData.recurrence_day_of_month}
+                      onChange={(e) => setFormData({ ...formData, recurrence_day_of_month: parseInt(e.target.value) || 1 })}
+                    />
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label htmlFor="recurrence_time">Time</Label>
                   <Input
@@ -485,21 +781,15 @@ export function CampaignsPage() {
 
       {/* Logs Dialog */}
       <Dialog open={isLogsOpen} onOpenChange={setIsLogsOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Campaign Logs</DialogTitle>
             <DialogDescription>
               Delivery logs for "{selectedCampaign?.name}"
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <div className="rounded-md border">
-              <div className="p-4 text-center text-muted-foreground">
-                <Calendar className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No logs available yet</p>
-                <p className="text-sm">Logs will appear once emails are sent</p>
-              </div>
-            </div>
+          <div className="flex-1 overflow-y-auto py-4">
+            <CampaignLogsViewer campaignId={selectedCampaign?.id} isOpen={isLogsOpen} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsLogsOpen(false)}>

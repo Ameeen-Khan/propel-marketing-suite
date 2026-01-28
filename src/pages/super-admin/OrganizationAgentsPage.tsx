@@ -35,12 +35,14 @@ import {
   MoreHorizontal,
   Pencil,
   ToggleLeft,
+  ToggleRight,
   Mail,
   Loader2,
   CheckCircle,
   XCircle,
 } from 'lucide-react';
 import { z } from 'zod';
+import { agentsApi } from '@/services/api';
 
 const agentSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be under 100 characters'),
@@ -48,13 +50,6 @@ const agentSchema = z.object({
   role: z.enum(['org_admin', 'org_user'], { required_error: 'Role is required' }),
 });
 
-// Mock data
-const mockAgents: Agent[] = [
-  { id: '1', name: 'John Smith', email: 'john@acme.com', role: 'org_admin', is_active: true, is_password_set: true, organization_id: '1', created_at: '2024-01-20' },
-  { id: '2', name: 'Sarah Johnson', email: 'sarah@acme.com', role: 'org_user', is_active: true, is_password_set: true, organization_id: '1', created_at: '2024-02-15' },
-  { id: '3', name: 'Mike Wilson', email: 'mike@acme.com', role: 'org_user', is_active: true, is_password_set: false, organization_id: '1', created_at: '2024-03-01' },
-  { id: '4', name: 'Emily Brown', email: 'emily@acme.com', role: 'org_user', is_active: false, is_password_set: true, organization_id: '1', created_at: '2024-03-10' },
-];
 
 export function OrganizationAgentsPage() {
   const { id } = useParams<{ id: string }>();
@@ -76,24 +71,61 @@ export function OrganizationAgentsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchAgents();
-  }, [page, limit, search]);
+    if (id) {
+      fetchAgents();
+    }
+  }, [page, limit, search, id]);
 
   const fetchAgents = async () => {
+    if (!id) return;
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    let filtered = [...mockAgents];
-    if (search) {
-      filtered = filtered.filter(agent =>
-        agent.name.toLowerCase().includes(search.toLowerCase()) ||
-        agent.email.toLowerCase().includes(search.toLowerCase())
-      );
+    try {
+      const response = await agentsApi.list({
+        page,
+        limit,
+        search,
+        sort_by: 'created_at',
+        sort_order: 'desc'
+      }, id);
+
+      if (response.success && response.data) {
+        // Normalize data
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const responseData = response.data as any;
+        const agentsData = responseData.data || (Array.isArray(responseData) ? responseData : []);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const normalizedAgents = agentsData.map((agent: any) => ({
+          ...agent,
+          id: agent.id || agent.ID,
+          name: agent.name || agent.Name,
+          email: agent.email || agent.Email,
+          role: agent.role || agent.Role,
+          is_active: agent.is_active !== undefined ? agent.is_active : (agent.IsActive !== undefined ? agent.IsActive : false),
+          is_password_set: agent.is_password_set !== undefined ? agent.is_password_set : (agent.IsPasswordSet !== undefined ? agent.IsPasswordSet : false),
+          created_at: agent.created_at || agent.CreatedAt || new Date().toISOString(),
+        }));
+
+        setAgents(normalizedAgents);
+        setTotal(responseData.total || normalizedAgents.length || 0);
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to load agents',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load agents',
+        variant: 'destructive'
+      });
+      setAgents([]);
+      setTotal(0);
+    } finally {
+      setIsLoading(false);
     }
-    
-    setTotal(filtered.length);
-    setAgents(filtered.slice((page - 1) * limit, page * limit));
-    setIsLoading(false);
   };
 
   const handleCreate = async () => {
@@ -109,13 +141,34 @@ export function OrganizationAgentsPage() {
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({ title: 'Agent created', description: `Invitation sent to ${formData.email}` });
-    setIsCreateOpen(false);
-    setFormData({ name: '', email: '', role: '' });
-    fetchAgents();
-    setIsSubmitting(false);
+    try {
+      const response = await agentsApi.create({
+        name: formData.name,
+        email: formData.email,
+        role: formData.role as 'org_admin' | 'org_user'
+      }, id);
+
+      if (response.success) {
+        toast({ title: 'Agent created', description: `Invitation sent to ${formData.email}` });
+        setIsCreateOpen(false);
+        setFormData({ name: '', email: '', role: '' });
+        fetchAgents();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to create agent',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to create agent',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleEdit = async () => {
@@ -132,25 +185,83 @@ export function OrganizationAgentsPage() {
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({ title: 'Agent updated', description: 'Agent details have been updated.' });
-    setIsEditOpen(false);
-    setSelectedAgent(null);
-    setFormData({ name: '', email: '', role: '' });
-    fetchAgents();
-    setIsSubmitting(false);
+    try {
+      const response = await agentsApi.update(selectedAgent.id, {
+        name: formData.name,
+        role: formData.role as 'org_admin' | 'org_user'
+      }, id);
+
+      if (response.success) {
+        toast({ title: 'Agent updated', description: 'Agent details have been updated.' });
+        setIsEditOpen(false);
+        setSelectedAgent(null);
+        setFormData({ name: '', email: '', role: '' });
+        fetchAgents();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to update agent',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update agent',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDeactivate = async (agent: Agent) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    toast({ title: 'Agent deactivated', description: `${agent.name} has been deactivated.` });
-    fetchAgents();
+  const handleToggleActive = async (agent: Agent) => {
+    try {
+      const response = agent.is_active
+        ? await agentsApi.deactivate(agent.id, id)
+        : await agentsApi.update(agent.id, { is_active: true }, id);
+
+      if (response.success) {
+        toast({
+          title: agent.is_active ? 'Agent deactivated' : 'Agent activated',
+          description: `${agent.name} has been ${agent.is_active ? 'deactivated' : 'activated'}.`,
+        });
+        fetchAgents();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || `Failed to ${agent.is_active ? 'deactivate' : 'activate'} agent`,
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: `Failed to ${agent.is_active ? 'deactivate' : 'activate'} agent`,
+        variant: 'destructive'
+      });
+    }
   };
 
   const handleResendInvite = async (agent: Agent) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    toast({ title: 'Invitation sent', description: `Invitation resent to ${agent.email}` });
+    try {
+      const response = await agentsApi.resendInvite(agent.id, id);
+      if (response.success) {
+        toast({ title: 'Invitation sent', description: `Invitation resent to ${agent.email}` });
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to resend invitation',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to resend invitation',
+        variant: 'destructive'
+      });
+    }
   };
 
   const openEdit = (agent: Agent) => {
@@ -222,12 +333,19 @@ export function OrganizationAgentsPage() {
                 Resend Invite
               </DropdownMenuItem>
             )}
-            {agent.is_active && (
-              <DropdownMenuItem onClick={() => handleDeactivate(agent)} className="text-destructive">
-                <ToggleLeft className="w-4 h-4 mr-2" />
-                Deactivate
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem onClick={() => handleToggleActive(agent)} className={agent.is_active ? "text-destructive" : ""}>
+              {agent.is_active ? (
+                <>
+                  <ToggleLeft className="w-4 h-4 mr-2" />
+                  Deactivate
+                </>
+              ) : (
+                <>
+                  <ToggleRight className="w-4 h-4 mr-2" />
+                  Activate
+                </>
+              )}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       ),

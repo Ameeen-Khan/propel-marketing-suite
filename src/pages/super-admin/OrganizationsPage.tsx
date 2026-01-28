@@ -33,23 +33,16 @@ import {
   Loader2,
 } from 'lucide-react';
 import { z } from 'zod';
+import { organizationsApi, agentsApi } from '@/services/api';
 
 const orgSchema = z.object({
   name: z.string().min(1, 'Organization name is required').max(100, 'Name must be under 100 characters'),
 });
 
-// Mock data
-const mockOrganizations: Organization[] = [
-  { id: '1', name: 'Acme Real Estate', is_active: true, created_at: '2024-01-15T10:00:00Z', agent_count: 12 },
-  { id: '2', name: 'Premier Properties', is_active: true, created_at: '2024-02-20T14:30:00Z', agent_count: 8 },
-  { id: '3', name: 'Urban Living Realty', is_active: false, created_at: '2024-03-10T09:15:00Z', agent_count: 5 },
-  { id: '4', name: 'Coastal Homes Group', is_active: true, created_at: '2024-04-05T16:45:00Z', agent_count: 15 },
-  { id: '5', name: 'Mountain View Estates', is_active: true, created_at: '2024-05-12T11:20:00Z', agent_count: 3 },
-];
-
 export function OrganizationsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [allOrganizations, setAllOrganizations] = useState<Organization[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -65,25 +58,104 @@ export function OrganizationsPage() {
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Fetch all data once (or on mutation)
   useEffect(() => {
     fetchOrganizations();
-  }, [page, limit, search]);
+  }, []);
+
+  // Filter and paginate locally whenever data, search, page, or limit changes
+  useEffect(() => {
+    let filtered = allOrganizations;
+
+    // Client-side search
+    if (search) {
+      const lowerSearch = search.toLowerCase();
+      filtered = allOrganizations.filter(org =>
+        org.name.toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    setTotal(filtered.length);
+
+    // Client-side pagination
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    setOrganizations(filtered.slice(start, end));
+
+  }, [allOrganizations, search, page, limit]);
 
   const fetchOrganizations = async () => {
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    let filtered = [...mockOrganizations];
-    if (search) {
-      filtered = filtered.filter(org =>
-        org.name.toLowerCase().includes(search.toLowerCase())
-      );
+    try {
+      // Fetch all organizations (use a high limit to get everything)
+      const response = await organizationsApi.list({
+        page: 1,
+        limit: 1000,
+        sort_by: 'created_at',
+        sort_order: 'desc'
+      });
+
+      if (response.success && response.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const responseData = response.data as any;
+        const orgsData = responseData.data || (Array.isArray(responseData) ? responseData : []);
+
+        // Normalize data
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const normalizedOrgs = orgsData.map((org: any) => ({
+          ...org,
+          id: org.id || org.ID,
+          name: org.name || org.Name,
+          is_active: org.is_active !== undefined ? org.is_active : (org.IsActive !== undefined ? org.IsActive : false),
+          created_at: org.created_at || org.CreatedAt || new Date().toISOString(),
+          agent_count: org.agent_count || org.AgentCount || 0,
+        }));
+
+        setAllOrganizations(normalizedOrgs);
+
+        // Fetch agent counts for each org in background
+        // We do this after setting initial state to show data fast
+        const orgsWithCounts = await Promise.all(
+          normalizedOrgs.map(async (org: Organization) => {
+            try {
+              const agentsRes = await agentsApi.list({ page: 1, limit: 1 }, org.id);
+              if (agentsRes.success && agentsRes.data) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const resData = agentsRes.data as any;
+                const count = resData.total !== undefined
+                  ? resData.total
+                  : (Array.isArray(resData) ? resData.length : (resData.data ? resData.data.length : 0));
+
+                return { ...org, agent_count: count };
+              }
+            } catch (e) {
+              // Ignore error
+            }
+            return org;
+          })
+        );
+
+        setAllOrganizations(orgsWithCounts);
+        setIsLoading(false);
+
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to load organizations',
+          variant: 'destructive'
+        });
+        setIsLoading(false);
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load organizations',
+        variant: 'destructive'
+      });
+      setAllOrganizations([]);
+      setTotal(0);
+      setIsLoading(false);
     }
-    
-    setTotal(filtered.length);
-    setOrganizations(filtered.slice((page - 1) * limit, page * limit));
-    setIsLoading(false);
   };
 
   const handleCreate = async () => {
@@ -95,13 +167,30 @@ export function OrganizationsPage() {
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({ title: 'Organization created', description: `${formName} has been created successfully.` });
-    setIsCreateOpen(false);
-    setFormName('');
-    fetchOrganizations();
-    setIsSubmitting(false);
+    try {
+      const response = await organizationsApi.create({ name: formName });
+      if (response.success) {
+        toast({ title: 'Organization created', description: `${formName} has been created successfully.` });
+        setIsCreateOpen(false);
+        setFormName('');
+        setPage(1); // Reset to first page to see the new organization
+        fetchOrganizations();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to create organization',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to create organization',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleEdit = async () => {
@@ -114,24 +203,59 @@ export function OrganizationsPage() {
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({ title: 'Organization updated', description: `${formName} has been updated successfully.` });
-    setIsEditOpen(false);
-    setSelectedOrg(null);
-    setFormName('');
-    fetchOrganizations();
-    setIsSubmitting(false);
+    try {
+      const response = await organizationsApi.update(selectedOrg.id, { name: formName });
+      if (response.success) {
+        toast({ title: 'Organization updated', description: `${formName} has been updated successfully.` });
+        setIsEditOpen(false);
+        setSelectedOrg(null);
+        setFormName('');
+        fetchOrganizations();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to update organization',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update organization',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleToggleActive = async (org: Organization) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const newStatus = !org.is_active;
-    toast({
-      title: newStatus ? 'Organization activated' : 'Organization deactivated',
-      description: `${org.name} has been ${newStatus ? 'activated' : 'deactivated'}.`,
-    });
-    fetchOrganizations();
+    try {
+      const response = org.is_active
+        ? await organizationsApi.deactivate(org.id)
+        : await organizationsApi.activate(org.id);
+
+      if (response.success) {
+        const newStatus = !org.is_active;
+        toast({
+          title: newStatus ? 'Organization activated' : 'Organization deactivated',
+          description: `${org.name} has been ${newStatus ? 'activated' : 'deactivated'}.`,
+        });
+        fetchOrganizations();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to update organization status',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update organization status',
+        variant: 'destructive'
+      });
+    }
   };
 
   const openEdit = (org: Organization) => {

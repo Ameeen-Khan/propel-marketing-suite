@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -24,18 +24,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { notificationsApi } from '@/services/api';
 
 const baseNavigation = [
   { name: 'Contacts', href: '/app/contacts', icon: Users },
+  { name: 'Audiences', href: '/app/audiences', icon: Target },
   { name: 'Templates', href: '/app/templates', icon: Mail },
   { name: 'Campaigns', href: '/app/campaigns', icon: Megaphone },
-  { name: 'Audiences', href: '/app/audiences', icon: Target },
 ];
 
 const adminOnlyNavigation = [
@@ -58,14 +55,69 @@ export function OrgLayout() {
     navigate('/login');
   };
 
-  // Mock notifications
-  const notifications = [
-    { id: 1, title: 'Campaign sent', message: 'Newsletter campaign completed', time: '5m ago', read: false },
-    { id: 2, title: 'Import complete', message: '150 contacts imported', time: '1h ago', read: false },
-    { id: 3, title: 'New signup', message: 'New agent joined', time: '2h ago', read: true },
-  ];
+  // State for real notifications
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  useEffect(() => {
+    fetchNotifications();
+    // Poll every 30 seconds for new notifications? Or just once on mount. 
+    // For now, once on mount + on navigation.
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      // Get latest 5
+      const response = await notificationsApi.list({ page: 1, limit: 5 });
+      if (response && response.success) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const responseData = response.data as any;
+        const data = responseData.notifications || responseData.data || (Array.isArray(responseData) ? responseData : []);
+
+        // Normalize
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const normalized = data.map((n: any) => ({
+          id: n.id || n.ID,
+          title: n.title || n.Title,
+          message: n.message || n.Message,
+          is_read: n.is_read !== undefined ? n.is_read : (n.IsRead !== undefined ? n.IsRead : false),
+          created_at: (n.created_at || n.CreatedAt || new Date().toISOString()).replace(/Z$/, ''),
+        }));
+
+        setNotifications(normalized);
+
+        // Calculate unread count globally or fetch specific unread count endpoint if available
+        // For now, filter local list (approximation) or check if response has 'total_unread'
+        const unread = normalized.filter((n: any) => !n.is_read).length;
+        setUnreadCount(unread);
+      }
+    } catch (e) {
+      console.error('Failed to fetch notifications in layout', e);
+    }
+  };
+
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationsApi.markAllRead();
+      // Update local state optimistic
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-background flex w-full">
@@ -94,13 +146,10 @@ export function OrgLayout() {
           {/* Logo & Org name */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-org-sidebar-border">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Home className="w-4 h-4 text-primary-foreground" />
-              </div>
+              <img src="/logo.png" alt="Propel" className="w-13 h-12 object-contain" />
               <div className="flex flex-col">
-                <span className="font-semibold text-foreground text-sm">REMP</span>
                 <span className="text-xs text-muted-foreground truncate max-w-[140px]">
-                  {user?.organization_name || 'Organization'}
+                  {user?.organization_name}
                 </span>
               </div>
             </div>
@@ -222,7 +271,7 @@ export function OrgLayout() {
             <PopoverContent align="end" className="w-80 p-0">
               <div className="flex items-center justify-between p-4 border-b">
                 <h3 className="font-semibold">Notifications</h3>
-                <Button variant="ghost" size="sm" className="text-xs">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={handleMarkAllRead}>
                   Mark all read
                 </Button>
               </div>
@@ -254,14 +303,14 @@ export function OrgLayout() {
                         }}
                         className={cn(
                           "p-4 border-b last:border-b-0 hover:bg-muted/50 cursor-pointer transition-colors",
-                          !notification.read && "bg-primary/5"
+                          !notification.is_read && "bg-primary/5"
                         )}
                       >
                         <div className="flex items-start gap-3">
                           <div
                             className={cn(
                               "w-2 h-2 mt-2 rounded-full flex-shrink-0",
-                              notification.read ? "bg-muted-foreground/30" : "bg-primary"
+                              notification.is_read ? "bg-muted-foreground/30" : "bg-primary"
                             )}
                           />
                           <div className="flex-1 min-w-0">
@@ -270,7 +319,7 @@ export function OrgLayout() {
                               {notification.message}
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
-                              {notification.time}
+                              {formatTime(notification.created_at)}
                             </p>
                           </div>
                         </div>

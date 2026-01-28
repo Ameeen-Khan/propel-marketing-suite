@@ -59,7 +59,7 @@ async function apiFetch<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   const headers: HeadersInit = {
-    'Content-Type': 'application/json',
+    ...(options.body && !(options.body instanceof FormData) && { 'Content-Type': 'application/json' }),
     ...(authToken && { Authorization: `Bearer ${authToken}` }),
     ...options.headers,
   };
@@ -70,12 +70,46 @@ async function apiFetch<T>(
       headers,
     });
 
-    const data = await response.json();
+    // Check for authorization errors immediately
+    if (response.status === 401 || response.status === 403) {
+      if (authToken) {
+        // Clear token and trigger logout if we were previously authenticated
+        setAuthToken(null);
+        localStorage.removeItem('propel_auth_token');
+        localStorage.removeItem('propel_auth_user');
+
+        // Dispatch storage event to notify AuthContext to update state
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'propel_auth_token',
+          newValue: null,
+          oldValue: authToken
+        }));
+      }
+
+      return {
+        success: false,
+        message: 'Session expired or not authorized',
+      };
+    }
+
+    const text = await response.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+      // Handle the case where the response body is explicitly "null"
+      if (data === null) data = {};
+    } catch (e) {
+      // If not JSON, return the text as message
+      return {
+        success: false,
+        message: text || response.statusText,
+      };
+    }
 
     if (!response.ok) {
       return {
         success: false,
-        message: data.message || 'An error occurred',
+        message: data.message || data.error || 'An error occurred',
         errors: data.errors,
       };
     }
@@ -93,13 +127,13 @@ async function apiFetch<T>(
 }
 
 // Build query string from pagination params
-function buildQueryString(params: PaginationParams): string {
+function buildQueryString(params: PaginationParams & Record<string, any>): string {
   const query = new URLSearchParams();
-  query.set('page', params.page.toString());
-  query.set('limit', params.limit.toString());
-  if (params.search) query.set('search', params.search);
-  if (params.sort_by) query.set('sort_by', params.sort_by);
-  if (params.sort_order) query.set('sort_order', params.sort_order);
+  Object.keys(params).forEach(key => {
+    if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+      query.set(key, params[key].toString());
+    }
+  });
   return query.toString();
 }
 
@@ -191,13 +225,15 @@ export const organizationsApi = {
     }),
 
   activate: (id: string) =>
-    apiFetch<Organization>(`/superadmin/orgs/${id}/activate`, {
-      method: 'POST',
+    apiFetch<Organization>(`/superadmin/orgs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_active: true }),
     }),
 
   deactivate: (id: string) =>
-    apiFetch<Organization>(`/superadmin/orgs/${id}/deactivate`, {
-      method: 'POST',
+    apiFetch<Organization>(`/superadmin/orgs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_active: false }),
     }),
 };
 
@@ -286,7 +322,7 @@ export const contactsApi = {
 
   update: (id: string, payload: UpdateContactPayload) =>
     apiFetch<Contact>(`/agent/contacts/${id}`, {
-      method: 'PATCH',
+      method: 'PUT',
       body: JSON.stringify(payload),
     }),
 
@@ -295,13 +331,13 @@ export const contactsApi = {
       method: 'DELETE',
     }),
 
-  importCSV: (file: File) => {
+  importCSV: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
+
     return apiFetch<CSVImportJob>('/agent/contacts/import', {
       method: 'POST',
-      headers: {}, // Let browser set content-type for FormData
-      body: formData as unknown as string,
+      body: formData,
     });
   },
 
@@ -328,7 +364,7 @@ export const audiencesApi = {
 
   update: (id: string, payload: UpdateAudiencePayload) =>
     apiFetch<Audience>(`/agent/audiences/${id}`, {
-      method: 'PATCH',
+      method: 'PUT',
       body: JSON.stringify(payload),
     }),
 
@@ -340,6 +376,12 @@ export const audiencesApi = {
   assignContacts: (id: string, payload: AssignContactsPayload) =>
     apiFetch<Audience>(`/agent/audiences/${id}/contacts`, {
       method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  removeContacts: (id: string, payload: AssignContactsPayload) =>
+    apiFetch<Audience>(`/agent/audiences/${id}/contacts`, {
+      method: 'DELETE',
       body: JSON.stringify(payload),
     }),
 
@@ -363,7 +405,7 @@ export const emailTemplatesApi = {
 
   update: (id: string, payload: UpdateEmailTemplatePayload) =>
     apiFetch<EmailTemplate>(`/agent/email-templates/${id}`, {
-      method: 'PATCH',
+      method: 'PUT',
       body: JSON.stringify(payload),
     }),
 
@@ -420,12 +462,12 @@ export const notificationsApi = {
 
   markRead: (id: string) =>
     apiFetch<Notification>(`/agent/notifications/${id}/read`, {
-      method: 'POST',
+      method: 'PUT',
     }),
 
   markAllRead: () =>
     apiFetch<void>('/agent/notifications/read-all', {
-      method: 'POST',
+      method: 'PUT',
     }),
 
   getUnreadCount: () =>

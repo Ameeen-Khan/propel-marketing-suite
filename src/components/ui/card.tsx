@@ -3,7 +3,7 @@ import { motion, HTMLMotionProps } from "framer-motion";
 
 import { cn } from "@/lib/utils";
 
-interface CardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, keyof HTMLMotionProps<"div">> {
+interface CardProps extends HTMLMotionProps<"div"> {
   children?: React.ReactNode;
   className?: string;
 }
@@ -14,7 +14,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(({ className, ...props 
     className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)}
     whileHover={{ y: -2, boxShadow: "0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)" }}
     transition={{ duration: 0.2, ease: "easeOut" }}
-    {...(props as any)}
+    {...props}
   />
 ));
 Card.displayName = "Card";

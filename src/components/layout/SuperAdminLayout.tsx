@@ -47,23 +47,21 @@ export function SuperAdminLayout() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-sidebar transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto",
+          "fixed inset-y-0 left-0 z-50 w-64 bg-org-sidebar border-r border-org-sidebar-border transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
+          <div className="flex items-center justify-between h-16 px-4 border-b border-org-sidebar-border">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-sidebar-primary rounded-lg flex items-center justify-center">
-                <Building2 className="w-4 h-4 text-sidebar-primary-foreground" />
-              </div>
-              <span className="font-semibold text-sidebar-foreground">REMP Admin</span>
+              <img src="/logo.png" alt="Propel Admin" className="w-12.5 h-12 object-contain" />
+              <span className="font-semibold text-foreground">Admin</span>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden text-sidebar-foreground hover:bg-sidebar-accent"
+              className="lg:hidden text-muted-foreground hover:bg-accent"
               onClick={() => setSidebarOpen(false)}
             >
               <X className="w-5 h-5" />
@@ -78,8 +76,8 @@ export function SuperAdminLayout() {
                 to={item.href}
                 className={({ isActive }) =>
                   cn(
-                    "nav-item",
-                    isActive ? "nav-item-active" : "nav-item-inactive"
+                    "org-nav-item",
+                    isActive ? "org-nav-item-active" : "org-nav-item-inactive"
                   )
                 }
                 onClick={() => setSidebarOpen(false)}
@@ -91,24 +89,24 @@ export function SuperAdminLayout() {
           </nav>
 
           {/* User menu */}
-          <div className="p-4 border-t border-sidebar-border">
+          <div className="p-4 border-t border-org-sidebar-border">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 w-full p-2 rounded-md hover:bg-sidebar-accent transition-colors text-left">
-                  <div className="w-8 h-8 bg-sidebar-primary rounded-full flex items-center justify-center">
-                    <span className="text-xs font-medium text-sidebar-primary-foreground">
+                <button className="flex items-center gap-3 w-full p-2 rounded-md hover:bg-accent transition-colors text-left">
+                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+                    <span className="text-xs font-medium text-primary-foreground">
                       {user?.name?.charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-sidebar-foreground truncate">
+                    <p className="text-sm font-medium text-foreground truncate">
                       {user?.name}
                     </p>
-                    <p className="text-xs text-sidebar-foreground/60 truncate">
+                    <p className="text-xs text-muted-foreground truncate">
                       Super Admin
                     </p>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-sidebar-foreground/60" />
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -135,7 +133,7 @@ export function SuperAdminLayout() {
           >
             <Menu className="w-5 h-5" />
           </Button>
-          <span className="ml-3 font-semibold">REMP Admin</span>
+          <span className="ml-3 font-semibold">Propel Admin</span>
         </header>
 
         {/* Page content */}

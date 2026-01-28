@@ -15,6 +15,7 @@ import { OrgLayout } from "@/components/layout/OrgLayout";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { LoginPage } from "./pages/auth/LoginPage";
+import { ActivateAccountPage } from "./pages/auth/ActivateAccountPage";
 
 // Super Admin Pages
 import { OrganizationsPage } from "./pages/super-admin/OrganizationsPage";
@@ -51,7 +52,10 @@ const App = () => (
                 </GuestGuard>
               }
             />
-
+            <Route
+              path="/auth/activate"
+              element={<ActivateAccountPage />}
+            />
             {/* Super Admin routes */}
             <Route
               path="/sa"

@@ -40,6 +40,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { z } from 'zod';
+import { contactsApi } from '@/services/api';
 
 const contactSchema = z.object({
   first_name: z.string().min(1, 'First name is required').max(50),
@@ -54,14 +55,6 @@ const contactSchema = z.object({
   square_feet: z.number().optional(),
   preferred_location: z.string().optional(),
 });
-
-// Mock data
-const mockContacts: Contact[] = [
-  { id: '1', first_name: 'Alice', last_name: 'Johnson', email: 'alice@email.com', phone: '+1-555-0101', property_type: 'House', budget_min: 300000, budget_max: 500000, bedrooms: 3, bathrooms: 2, square_feet: 2000, preferred_location: 'Downtown', created_at: '2024-01-10' },
-  { id: '2', first_name: 'Bob', last_name: 'Smith', email: 'bob@email.com', phone: '+1-555-0102', property_type: 'Condo', budget_min: 200000, budget_max: 350000, bedrooms: 2, bathrooms: 1, square_feet: 1200, preferred_location: 'Suburbs', created_at: '2024-02-15' },
-  { id: '3', first_name: 'Carol', last_name: 'Davis', email: 'carol@email.com', phone: '+1-555-0103', property_type: 'Apartment', budget_min: 150000, budget_max: 250000, bedrooms: 1, bathrooms: 1, square_feet: 800, preferred_location: 'City Center', created_at: '2024-03-20' },
-  { id: '4', first_name: 'David', last_name: 'Wilson', email: 'david@email.com', phone: '+1-555-0104', property_type: 'House', budget_min: 500000, budget_max: 800000, bedrooms: 4, bathrooms: 3, square_feet: 3500, preferred_location: 'Waterfront', created_at: '2024-04-05' },
-];
 
 // Animation variant for form fields
 const formFieldVariant = {
@@ -101,13 +94,9 @@ export function ContactsPage() {
     preferred_location: '',
   });
 
-  // Quick filters state
-  const [propertyTypeFilter, setPropertyTypeFilter] = useState<string>('');
-  const [locationFilter, setLocationFilter] = useState<string>('');
-
   useEffect(() => {
     fetchContacts();
-  }, [page, limit, search, propertyTypeFilter, locationFilter]);
+  }, [page, limit, search]);
 
 
   // Keyboard shortcuts
@@ -135,31 +124,68 @@ export function ContactsPage() {
 
   const fetchContacts = async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const response = await contactsApi.list({
+        page,
+        limit,
+        search,
+        sort_by: 'created_at',
+        sort_order: 'desc',
+      });
 
-    let filtered = [...mockContacts];
+      if (response.success && response.data) {
+        console.log('Raw Contacts API Response:', response.data); // DEBUG LOG
 
-    // Apply search filter
-    if (search) {
-      filtered = filtered.filter(contact =>
-        `${contact.first_name} ${contact.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
-        contact.email.toLowerCase().includes(search.toLowerCase())
-      );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const responseData = response.data as any;
+        // Prioritize 'contacts' array as seen in logs
+        const contactsData = responseData.contacts || responseData.data || (Array.isArray(responseData) ? responseData : []);
+
+        console.log('Extracted Contacts Data:', contactsData); // DEBUG LOG
+
+        // Normalize data to handle potential backend inconsistency (e.g. PascalCase vs camelCase)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const normalizedContacts = contactsData.map((contact: any) => ({
+          ...contact,
+          id: contact.id || contact.ID,
+          first_name: contact.first_name || contact.FirstName,
+          last_name: contact.last_name || contact.LastName,
+          email: contact.email || contact.Email,
+          phone: contact.phone || contact.Phone,
+          property_type: contact.property_type || contact.PropertyType,
+          budget_min: contact.budget_min || contact.BudgetMin,
+          budget_max: contact.budget_max || contact.BudgetMax,
+          bedrooms: contact.bedrooms || contact.Bedrooms,
+          bathrooms: contact.bathrooms || contact.Bathrooms,
+          square_feet: contact.square_feet || contact.SquareFeet,
+          preferred_location: contact.preferred_location || contact.PreferredLocation,
+          is_active: contact.is_active !== undefined ? contact.is_active : (contact.IsActive !== undefined ? contact.IsActive : true),
+          created_at: contact.created_at || contact.CreatedAt || new Date().toISOString(),
+        }));
+
+        // Filter out inactive contacts (soft deleted)
+        const activeContacts = normalizedContacts.filter((c: any) => c.is_active !== false);
+
+        setContacts(activeContacts);
+        setTotal(responseData.total || activeContacts.length || 0);
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to load contacts',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load contacts',
+        variant: 'destructive'
+      });
+      setContacts([]);
+      setTotal(0);
+    } finally {
+      setIsLoading(false);
     }
-
-    // Apply property type filter
-    if (propertyTypeFilter) {
-      filtered = filtered.filter(contact => contact.property_type === propertyTypeFilter);
-    }
-
-    // Apply location filter
-    if (locationFilter) {
-      filtered = filtered.filter(contact => contact.preferred_location === locationFilter);
-    }
-
-    setTotal(filtered.length);
-    setContacts(filtered.slice((page - 1) * limit, page * limit));
-    setIsLoading(false);
   };
 
   const resetForm = () => {
@@ -206,13 +232,29 @@ export function ContactsPage() {
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    toast({ title: 'Contact created', description: `${formData.first_name} ${formData.last_name} has been added.` });
-    setIsCreateOpen(false);
-    resetForm();
-    fetchContacts();
-    setIsSubmitting(false);
+    try {
+      const response = await contactsApi.create(payload);
+      if (response.success) {
+        toast({ title: 'Contact created', description: `${formData.first_name} ${formData.last_name} has been added.` });
+        setIsCreateOpen(false);
+        resetForm();
+        fetchContacts();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to create contact',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to create contact',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleEdit = async () => {
@@ -244,40 +286,95 @@ export function ContactsPage() {
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    toast({ title: 'Contact updated', description: 'Contact details have been updated.' });
-    setIsEditOpen(false);
-    setSelectedContact(null);
-    resetForm();
-    fetchContacts();
-    setIsSubmitting(false);
+    try {
+      const response = await contactsApi.update(selectedContact.id, payload);
+      if (response.success) {
+        toast({ title: 'Contact updated', description: 'Contact details have been updated.' });
+        setIsEditOpen(false);
+        setSelectedContact(null);
+        resetForm();
+        fetchContacts();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to update contact',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update contact',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDelete = async () => {
     if (!selectedContact) return;
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      console.log('Deleting contact:', selectedContact.id);
+      const response = await contactsApi.delete(selectedContact.id);
+      if (response.success) {
+        toast({ title: 'Contact deleted', description: `${selectedContact.first_name} ${selectedContact.last_name} has been removed.` });
 
-    toast({ title: 'Contact deleted', description: `${selectedContact.first_name} ${selectedContact.last_name} has been removed.` });
-    setIsDeleteOpen(false);
-    setSelectedContact(null);
-    fetchContacts();
-    setIsSubmitting(false);
+        setIsDeleteOpen(false);
+        setSelectedContact(null);
+
+        // Re-fetch to get accurate total count from backend
+        fetchContacts();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to delete contact',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete contact',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    toast({
-      title: 'Import started',
-      description: `Processing ${file.name}...`,
-    });
-
-    // Reset the input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    try {
+      const response = await contactsApi.importCSV(file);
+      if (response.success) {
+        toast({
+          title: 'Import started',
+          description: `Processing ${file.name}...`,
+        });
+        // Refresh contacts after a delay to allow processing
+        setTimeout(() => fetchContacts(), 2000);
+      } else {
+        toast({
+          title: 'Import failed',
+          description: response.message || 'Failed to import CSV',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Import failed',
+        description: 'Failed to import CSV file',
+        variant: 'destructive'
+      });
+    } finally {
+      // Reset the input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -338,7 +435,7 @@ export function ContactsPage() {
       header: 'Created',
       cell: (contact) => (
         <span className="text-muted-foreground">
-          {new Date(contact.created_at).toLocaleDateString()}
+          {new Date(contact.created_at).toLocaleDateString(undefined, { timeZone: 'UTC' })}
         </span>
       ),
     },
@@ -397,62 +494,8 @@ export function ContactsPage() {
         }
       />
 
-      {/* Quick Filters */}
-      <motion.div 
-        className="mb-4 flex flex-wrap items-center gap-2"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2 }}
-      >
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Filter className="w-4 h-4" />
-          <span className="font-medium">Quick Filters:</span>
-        </div>
-        
-        {/* Property Type Filters */}
-        {['House', 'Condo', 'Apartment', 'Townhouse'].map((type) => (
-          <Badge
-            key={type}
-            variant={propertyTypeFilter === type ? 'default' : 'outline'}
-            className="cursor-pointer transition-all hover:scale-105"
-            onClick={() => setPropertyTypeFilter(propertyTypeFilter === type ? '' : type)}
-          >
-            {type}
-            {propertyTypeFilter === type && (
-              <X className="w-3 h-3 ml-1" onClick={(e) => { e.stopPropagation(); setPropertyTypeFilter(''); }} />
-            )}
-          </Badge>
-        ))}
 
-        <div className="w-px h-4 bg-border" />
 
-        {/* Location Filters */}
-        {['Downtown', 'Suburbs', 'City Center', 'Waterfront'].map((location) => (
-          <Badge
-            key={location}
-            variant={locationFilter === location ? 'default' : 'secondary'}
-            className="cursor-pointer transition-all hover:scale-105"
-            onClick={() => setLocationFilter(locationFilter === location ? '' : location)}
-          >
-            {location}
-            {locationFilter === location && (
-              <X className="w-3 h-3 ml-1" onClick={(e) => { e.stopPropagation(); setLocationFilter(''); }} />
-            )}
-          </Badge>
-        ))}
-
-        {/* Clear All */}
-        {(propertyTypeFilter || locationFilter) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => { setPropertyTypeFilter(''); setLocationFilter(''); }}
-          >
-            Clear all
-          </Button>
-        )}
-      </motion.div>
 
       <DataTable
         columns={columns}
@@ -567,14 +610,14 @@ export function ContactsPage() {
                   <SelectValue placeholder="Select location" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Downtown">Downtown</SelectItem>
-                  <SelectItem value="Suburbs">Suburbs</SelectItem>
-                  <SelectItem value="City Center">City Center</SelectItem>
-                  <SelectItem value="Waterfront">Waterfront</SelectItem>
-                  <SelectItem value="Uptown">Uptown</SelectItem>
-                  <SelectItem value="Midtown">Midtown</SelectItem>
-                  <SelectItem value="Beachfront">Beachfront</SelectItem>
-                  <SelectItem value="Rural Area">Rural Area</SelectItem>
+                  <SelectItem value="Wakad">Wakad</SelectItem>
+                  <SelectItem value="Baner">Baner</SelectItem>
+                  <SelectItem value="Koregaon">Koregaon</SelectItem>
+                  <SelectItem value="Kondhwa">Kondhwa</SelectItem>
+                  <SelectItem value="Balewadi">Balewadi</SelectItem>
+                  <SelectItem value="Hinjewadi">Hinjewadi</SelectItem>
+                  <SelectItem value="Kharadi">Kharadi</SelectItem>
+                  <SelectItem value="Aundh">Aundh</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -656,6 +699,6 @@ export function ContactsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   );
 }

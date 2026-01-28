@@ -68,12 +68,13 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary/30 p-4">
       <div className="w-full max-w-md animate-fade-in">
         {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center mb-4 shadow-lg">
-            <Building2 className="w-7 h-7 text-primary-foreground" />
+        <div className="flex flex-col items-center mb-10 space-y-3">
+          <div className="p-3 rounded-xl bg-secondary/20 backdrop-blur-sm">
+            <img src="/logo.png" alt="Propel" className="w-auto h-16 object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Real Estate Marketing</h1>
-          <p className="text-muted-foreground mt-1">Platform</p>
+          <p className="text-sm font-medium tracking-[0.2em] text-muted-foreground uppercase text-center">
+            Marketing Suite
+          </p>
         </div>
 
         <Card className="border-border/50 shadow-xl">

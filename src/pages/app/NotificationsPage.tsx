@@ -4,20 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Notification, NotificationType } from '@/types';
-import { Bell, CheckCheck, Info, AlertCircle, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Bell, CheckCheck, Info, AlertCircle, CheckCircle, AlertTriangle, Loader2, Send, Upload, UserPlus, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { notificationsApi } from '@/services/api';
 
-// Mock data
-const mockNotifications: Notification[] = [
-  { id: '1', title: 'Campaign completed', message: 'Your "Welcome Series" campaign has finished sending.', notification_type: 'success', is_read: false, created_at: '2024-04-20T10:30:00Z' },
-  { id: '2', title: 'CSV import complete', message: '150 contacts have been successfully imported.', notification_type: 'success', is_read: false, created_at: '2024-04-20T09:15:00Z' },
-  { id: '3', title: 'Campaign paused', message: 'Your "Weekly Newsletter" campaign has been paused due to low engagement.', notification_type: 'warning', is_read: false, created_at: '2024-04-19T16:45:00Z' },
-  { id: '4', title: 'New agent joined', message: 'Sarah Johnson has accepted the invitation and joined your organization.', notification_type: 'info', is_read: true, created_at: '2024-04-19T14:20:00Z' },
-  { id: '5', title: 'Email delivery failed', message: '5 emails from your "New Listing Alert" campaign bounced.', notification_type: 'error', is_read: true, created_at: '2024-04-18T11:00:00Z' },
-  { id: '6', title: 'Template updated', message: 'Your "Monthly Newsletter" template has been updated.', notification_type: 'info', is_read: true, created_at: '2024-04-17T09:30:00Z' },
-];
 
 const typeIcons: Record<NotificationType, React.ReactNode> = {
+  campaign_sent: <Send className="w-5 h-5 text-success" />,
+  csv_import_completed: <Upload className="w-5 h-5 text-success" />,
+  csv_import_failed: <XCircle className="w-5 h-5 text-destructive" />,
+  agent_added: <UserPlus className="w-5 h-5 text-primary" />,
   info: <Info className="w-5 h-5 text-primary" />,
   success: <CheckCircle className="w-5 h-5 text-success" />,
   warning: <AlertTriangle className="w-5 h-5 text-warning" />,
@@ -36,23 +32,82 @@ export function NotificationsPage() {
 
   const fetchNotifications = async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setNotifications(mockNotifications);
-    setIsLoading(false);
+    try {
+      const response = await notificationsApi.list({ page: 1, limit: 100 });
+      console.log('NotificationsPage - Response:', response);
+
+      if (response && response.success) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const responseData = response.data as any;
+        const notificationsData = responseData.notifications || responseData.data || (Array.isArray(responseData) ? responseData : []);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const normalized = notificationsData.map((n: any) => ({
+          ...n,
+          id: n.id || n.ID,
+          title: n.title || n.Title,
+          message: n.message || n.Message,
+          notification_type: (n.notification_type || n.NotificationType || 'info').toLowerCase(),
+          is_read: n.is_read !== undefined ? n.is_read : (n.IsRead !== undefined ? n.IsRead : false),
+          created_at: (n.created_at || n.CreatedAt || new Date().toISOString()).replace(/Z$/, ''),
+        }));
+
+        setNotifications(normalized);
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to load notifications',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load notifications',
+        variant: 'destructive'
+      });
+      setNotifications([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleMarkAsRead = async (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, is_read: true } : n)
-    );
+    try {
+      const response = await notificationsApi.markRead(id);
+      if (response.success) {
+        setNotifications(prev =>
+          prev.map(n => n.id === id ? { ...n, is_read: true } : n)
+        );
+      }
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
   };
 
   const handleMarkAllAsRead = async () => {
     setIsMarkingAll(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-    toast({ title: 'All notifications marked as read' });
-    setIsMarkingAll(false);
+    try {
+      const unreadNotifications = notifications.filter(n => !n.is_read);
+
+      // Mark each unread notification individually
+      await Promise.all(
+        unreadNotifications.map(notification =>
+          notificationsApi.markRead(notification.id)
+        )
+      );
+
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      toast({ title: 'All notifications marked as read' });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to mark all as read',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsMarkingAll(false);
+    }
   };
 
   const unreadCount = notifications.filter(n => !n.is_read).length;

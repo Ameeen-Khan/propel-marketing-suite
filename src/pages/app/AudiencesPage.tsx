@@ -35,28 +35,12 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { z } from 'zod';
+import { audiencesApi, contactsApi } from '@/services/api';
 
 const audienceSchema = z.object({
   name: z.string().min(1, 'Audience name is required').max(100),
   description: z.string().max(500).optional(),
 });
-
-// Mock data
-const mockAudiences: Audience[] = [
-  { id: '1', name: 'New Leads', description: 'Contacts added in the last 30 days', contact_count: 150, created_at: '2024-01-10' },
-  { id: '2', name: 'All Contacts', description: 'Complete contact list', contact_count: 500, created_at: '2024-01-01' },
-  { id: '3', name: 'Buyers', description: 'Contacts looking to buy property', contact_count: 200, created_at: '2024-02-15', filters: { property_type: ['House', 'Condo'] } },
-  { id: '4', name: 'Sellers', description: 'Contacts looking to sell', contact_count: 80, created_at: '2024-03-01' },
-  { id: '5', name: 'VIP Clients', description: 'High-value clients', contact_count: 25, created_at: '2024-03-20', filters: { budget_min: 500000 } },
-];
-
-const mockContacts: Contact[] = [
-  { id: '1', first_name: 'Alice', last_name: 'Johnson', email: 'alice@email.com', property_type: 'House', bedrooms: 3, bathrooms: 2, budget_min: 300000, budget_max: 500000, preferred_location: 'Downtown', created_at: '2024-01-10' },
-  { id: '2', first_name: 'Bob', last_name: 'Smith', email: 'bob@email.com', property_type: 'Condo', bedrooms: 2, bathrooms: 1, budget_min: 200000, budget_max: 350000, preferred_location: 'Suburbs', created_at: '2024-02-15' },
-  { id: '3', first_name: 'Carol', last_name: 'Davis', email: 'carol@email.com', property_type: 'Apartment', bedrooms: 1, bathrooms: 1, budget_min: 150000, budget_max: 250000, preferred_location: 'City Center', created_at: '2024-03-20' },
-  { id: '4', first_name: 'David', last_name: 'Wilson', email: 'david@email.com', property_type: 'House', bedrooms: 4, bathrooms: 3, budget_min: 500000, budget_max: 800000, preferred_location: 'Waterfront', created_at: '2024-04-05' },
-  { id: '5', first_name: 'Emma', last_name: 'Brown', email: 'emma@email.com', property_type: 'Townhouse', bedrooms: 3, bathrooms: 2, budget_min: 400000, budget_max: 550000, preferred_location: 'Downtown', created_at: '2024-04-10' },
-];
 
 // Filter contacts based on AudienceFilters
 function filterContacts(contacts: Contact[], filters: AudienceFilters): Contact[] {
@@ -104,6 +88,7 @@ function filterContacts(contacts: Contact[], filters: AudienceFilters): Contact[
 export function AudiencesPage() {
   const { toast } = useToast();
   const [audiences, setAudiences] = useState<Audience[]>([]);
+  const [allContacts, setAllContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -122,6 +107,7 @@ export function AudiencesPage() {
   // Filters and member selection
   const [filters, setFilters] = useState<AudienceFilters>({});
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+  const [originalContactIds, setOriginalContactIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'filter' | 'manual'>('filter');
 
   const [formData, setFormData] = useState({
@@ -131,27 +117,190 @@ export function AudiencesPage() {
 
   // Compute matching contacts based on filters
   const matchingContacts = useMemo(() => {
-    return filterContacts(mockContacts, filters);
-  }, [filters]);
+    return filterContacts(allContacts, filters);
+  }, [allContacts, filters]);
 
   useEffect(() => {
     fetchAudiences();
-  }, [page, limit, search]);
+  }, [page, limit, search, allContacts]); // Re-run when contacts change to update counts
+
+  useEffect(() => {
+    fetchAllContacts();
+  }, []); // Only fetch contacts once on mount (or maybe on focus)
+
+  const fetchAllContacts = async () => {
+    try {
+      const response = await contactsApi.list({ page: 1, limit: 1000 });
+      console.log('AudiencePage - Contacts Response:', response);
+
+      if (response && response.success && response.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const responseData = response.data as any;
+        const contactsData = responseData.contacts || responseData.data || (Array.isArray(responseData) ? responseData : []);
+
+        if (!Array.isArray(contactsData)) {
+          console.warn('AudiencePage - Contacts data is not an array:', contactsData);
+          setAllContacts([]);
+          return;
+        }
+
+        // Normalize if needed
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const normalized = contactsData.map((c: any) => ({
+          ...c,
+          id: c.id || c.ID,
+          first_name: c.first_name || c.FirstName,
+          last_name: c.last_name || c.LastName,
+          email: c.email || c.Email,
+          property_type: c.property_type || c.PropertyType,
+          bedrooms: c.bedrooms || c.Bedrooms,
+          bathrooms: c.bathrooms || c.Bathrooms,
+          budget_min: c.budget_min || c.BudgetMin,
+          budget_max: c.budget_max || c.BudgetMax,
+          square_feet: c.square_feet || c.SquareFeet,
+          preferred_location: c.preferred_location || c.PreferredLocation,
+          is_active: c.is_active !== undefined ? c.is_active : (c.IsActive !== undefined ? c.IsActive : true),
+        }));
+
+        // Filter out inactive (soft-deleted) contacts
+        const activeContacts = normalized.filter((c: any) => c.is_active !== false);
+
+        setAllContacts(activeContacts);
+      }
+    } catch (error) {
+      console.error('Failed to fetch contacts:', error);
+    }
+  };
 
   const fetchAudiences = async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    let filtered = [...mockAudiences];
-    if (search) {
-      filtered = filtered.filter(audience =>
-        audience.name.toLowerCase().includes(search.toLowerCase())
-      );
+    try {
+      const response = await audiencesApi.list({
+        page,
+        limit,
+        search,
+        sort_by: 'created_at',
+        sort_order: 'desc'
+      });
+      console.log('AudiencePage - Audiences Response:', response);
+
+      if (response && response.success && response.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const responseData = response.data as any;
+        const audiencesData = responseData.audiences || responseData.data || (Array.isArray(responseData) ? responseData : []);
+
+        if (!Array.isArray(audiencesData)) {
+          console.warn('AudiencePage - Audiences data is not an array:', audiencesData);
+          setAudiences([]);
+          setTotal(0);
+          return;
+        }
+
+        // Normalize
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let normalized = audiencesData.map((a: any) => {
+          let count = 0;
+
+          // Priority 1: Backend contacts array length - filter inactive ones
+          if (Array.isArray(a.contacts)) {
+            // Filter inactive contacts if possible
+            const activeContacts = a.contacts.filter((c: any) =>
+              (c.is_active !== undefined ? c.is_active : (c.IsActive !== undefined ? c.IsActive : true)) !== false
+            );
+            count = activeContacts.length;
+          } else if (a.contact_count !== undefined) {
+            // Note: If backend sends just a number, it might include inactive ones if backend logic isn't updated.
+            // But we can't filter without the list.
+            count = a.contact_count;
+          } else if (a.ContactCount !== undefined) {
+            count = a.ContactCount;
+          }
+
+          // Recalculate count for Filtered Audiences client-side to ensure it excludes inactive contacts
+          // (Backend count might include them)
+          if (a.filters && Object.keys(a.filters).length > 0 && allContacts.length > 0) {
+            const matches = filterContacts(allContacts, a.filters);
+            count = matches.length;
+          }
+
+          return {
+            ...a,
+            id: a.id || a.ID,
+            name: a.name || a.Name,
+            description: a.description || a.Description,
+            filters: a.filters || a.Filters,
+            contact_count: count,
+            created_at: (a.created_at || a.CreatedAt || new Date().toISOString()).replace(/Z$/, ''),
+            _needsContactFetch: !Array.isArray(a.contacts) && (!a.filters || Object.keys(a.filters).length === 0) // Flag manual audiences that need fetching
+          };
+        });
+
+        // For manual audiences without contact array, fetch actual contacts to get accurate count
+        const audiencesNeedingFetch = normalized.filter((a: any) => a._needsContactFetch);
+
+        if (audiencesNeedingFetch.length > 0) {
+          // Fetch contacts for each manual audience to get accurate active count
+          Promise.all(
+            audiencesNeedingFetch.map(async (audience: any) => {
+              try {
+                const response = await audiencesApi.getContacts(audience.id, { page: 1, limit: 1000 });
+                if (response.success && response.data) {
+                  const responseData = response.data as any;
+                  const contacts = responseData.contacts || responseData.data || (Array.isArray(responseData) ? responseData : []);
+                  const activeContacts = contacts.filter((c: any) =>
+                    (c.is_active !== undefined ? c.is_active : (c.IsActive !== undefined ? c.IsActive : true)) !== false
+                  );
+                  return { id: audience.id, count: activeContacts.length };
+                }
+              } catch (e) {
+                console.error('Failed to fetch contacts for audience', audience.id, e);
+              }
+              return { id: audience.id, count: audience.contact_count };
+            })
+          ).then((results) => {
+            // Update the normalized array with accurate counts
+            setAudiences(prev => prev.map(a => {
+              const result = results.find(r => r.id === a.id);
+              if (result) {
+                return { ...a, contact_count: result.count };
+              }
+              return a;
+            }));
+          });
+        }
+
+
+        // Client-side filtering if backend search isn't effective
+        if (search) {
+          const lowerSearch = search.toLowerCase();
+          normalized = normalized.filter((a: any) =>
+            a.name.toLowerCase().includes(lowerSearch) ||
+            (a.description && a.description.toLowerCase().includes(lowerSearch))
+          );
+        }
+
+        setAudiences(normalized);
+        setTotal(responseData.total || normalized.length || 0);
+      } else {
+        console.error('AudiencePage - Fetch failed:', response);
+        toast({
+          title: 'Error',
+          description: response?.message || 'Failed to load audiences',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      console.error('AudiencePage - Fetch error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load audiences',
+        variant: 'destructive'
+      });
+      setAudiences([]);
+      setTotal(0);
+    } finally {
+      setIsLoading(false);
     }
-    
-    setTotal(filtered.length);
-    setAudiences(filtered.slice((page - 1) * limit, page * limit));
-    setIsLoading(false);
   };
 
   const resetForm = () => {
@@ -159,11 +308,13 @@ export function AudiencesPage() {
     setFormErrors({});
     setFilters({});
     setSelectedContactIds([]);
+    setOriginalContactIds([]);
     setActiveTab('filter');
   };
 
   const handleApplyFilters = () => {
-    const filtered = filterContacts(mockContacts, filters);
+    const filtered = filterContacts(allContacts, filters);
+    // Overwrite any previously selected contacts with the new filter matches
     setSelectedContactIds(filtered.map((c) => c.id));
     toast({
       title: 'Filters applied',
@@ -184,16 +335,53 @@ export function AudiencesPage() {
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({
-      title: 'Audience created',
-      description: `${formData.name} has been created with ${selectedContactIds.length} contacts.`,
-    });
-    setIsCreateOpen(false);
-    resetForm();
-    fetchAudiences();
-    setIsSubmitting(false);
+    try {
+      const payload: any = {
+        name: formData.name,
+        description: formData.description || undefined,
+      };
+
+      // Always use filter mode for creation (manual selection removed from create dialog)
+      const hasFilters = Object.keys(filters).length > 0;
+      if (hasFilters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            if (Array.isArray(value) && value.length === 0) return;
+            payload[key] = value;
+          }
+        });
+      }
+      payload.contact_ids = undefined;
+      payload.filters = undefined;
+
+      const response = await audiencesApi.create(payload);
+
+      if (response.success) {
+        const finalCount = matchingContacts.length;
+
+        toast({
+          title: 'Audience created',
+          description: `${formData.name} has been created with ${finalCount} contacts.`,
+        });
+        setIsCreateOpen(false);
+        resetForm();
+        fetchAudiences();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to create audience',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to create audience',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleEdit = async () => {
@@ -210,43 +398,138 @@ export function AudiencesPage() {
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({ title: 'Audience updated', description: 'Audience has been updated.' });
-    setIsEditOpen(false);
-    setSelectedAudience(null);
-    resetForm();
-    fetchAudiences();
-    setIsSubmitting(false);
+    try {
+      // Only update name and description
+      const payload = {
+        name: formData.name,
+        description: formData.description || undefined,
+      };
+
+      await audiencesApi.update(selectedAudience.id, payload);
+
+      toast({ title: 'Audience updated', description: 'Audience name and description have been updated.' });
+
+      // Optimistically update
+      setAudiences(prev => prev.map(a => {
+        if (a.id === selectedAudience.id) {
+          return {
+            ...a,
+            name: formData.name,
+            description: formData.description,
+          };
+        }
+        return a;
+      }));
+
+      setIsEditOpen(false);
+      setSelectedAudience(null);
+      resetForm();
+      fetchAudiences();
+
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update audience',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDelete = async () => {
     if (!selectedAudience) return;
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({ title: 'Audience deleted', description: `${selectedAudience.name} has been removed.` });
-    setIsDeleteOpen(false);
-    setSelectedAudience(null);
-    fetchAudiences();
-    setIsSubmitting(false);
+    try {
+      const response = await audiencesApi.delete(selectedAudience.id);
+      if (response.success) {
+        toast({ title: 'Audience deleted', description: `${selectedAudience.name} has been removed.` });
+        setIsDeleteOpen(false);
+        setSelectedAudience(null);
+        fetchAudiences();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to delete audience',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete audience',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleManageMembers = async () => {
     if (!selectedAudience) return;
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({
-      title: 'Members updated',
-      description: `${selectedAudience.name} now has ${selectedContactIds.length} contacts.`,
-    });
-    setIsManageMembersOpen(false);
-    setSelectedAudience(null);
-    setSelectedContactIds([]);
-    setFilters({});
-    fetchAudiences();
-    setIsSubmitting(false);
+    try {
+      // Calculate diffs between original and current selection
+      const toAdd = selectedContactIds.filter(id => !originalContactIds.includes(id));
+      const toRemove = originalContactIds.filter(id => !selectedContactIds.includes(id));
+
+      // Apply additions
+      if (toAdd.length > 0) {
+        await audiencesApi.assignContacts(selectedAudience.id, {
+          contact_ids: toAdd
+        });
+      }
+
+      // Apply removals
+      if (toRemove.length > 0) {
+        await audiencesApi.removeContacts(selectedAudience.id, {
+          contact_ids: toRemove
+        });
+      }
+
+      // Clear filters to ensure it becomes a static audience
+      const updateResponse = await audiencesApi.update(selectedAudience.id, {
+        name: selectedAudience.name,
+        description: selectedAudience.description || undefined,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        filters: null as any
+      });
+
+      if (updateResponse.success) {
+        toast({
+          title: 'Members updated',
+          description: `${selectedAudience.name} now has ${selectedContactIds.length} contacts. Filters have been cleared.`,
+        });
+
+        // Optimistically update local state
+        setAudiences(prev => prev.map(a =>
+          a.id === selectedAudience.id
+            ? { ...a, contact_count: selectedContactIds.length, filters: undefined }
+            : a
+        ));
+
+        setIsManageMembersOpen(false);
+        setSelectedAudience(null);
+        setSelectedContactIds([]);
+        setOriginalContactIds([]);
+        setFilters({});
+        fetchAudiences();
+      } else {
+        toast({
+          title: 'Warning',
+          description: updateResponse.message || 'Members updated but failed to clear filters.',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update members',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const openEdit = (audience: Audience) => {
@@ -257,13 +540,46 @@ export function AudiencesPage() {
     setIsEditOpen(true);
   };
 
-  const openManageMembers = (audience: Audience) => {
+  const openManageMembers = async (audience: Audience) => {
     setSelectedAudience(audience);
     setFilters(audience.filters || {});
-    // Pre-select contacts based on existing filters
-    const filtered = filterContacts(mockContacts, audience.filters || {});
-    setSelectedContactIds(filtered.map((c) => c.id));
     setIsManageMembersOpen(true);
+
+    // Initial loading state could be helpful here
+    try {
+      // Fetch actual assigned contacts from backend
+      // Note: This fetches the first page. If an audience has >1000 members, this simple UI might struggle.
+      // We'll assume for this "Manage Members" manual view, the audience is manageable directly.
+      const response = await audiencesApi.getContacts(audience.id, { page: 1, limit: 1000 });
+      if (response.success && response.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const responseData = response.data as any;
+        const contacts = responseData.contacts || responseData.data || (Array.isArray(responseData) ? responseData : []);
+
+        // Filter inactive contacts
+        const activeContacts = contacts.filter((c: any) =>
+          (c.is_active !== undefined ? c.is_active : (c.IsActive !== undefined ? c.IsActive : true)) !== false
+        );
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ids = activeContacts.map((c: any) => c.id || c.ID);
+        setSelectedContactIds(ids);
+        setOriginalContactIds(ids); // Track original state for diff calculation
+      } else {
+        // Fallback to filter calculation if fetch fails or is empty (and we trust filters)
+        const filtered = filterContacts(allContacts, audience.filters || {});
+        const ids = filtered.map((c) => c.id);
+        setSelectedContactIds(ids);
+        setOriginalContactIds(ids); // Track original state for diff calculation
+      }
+    } catch (e) {
+      console.error('Failed to fetch audience contacts', e);
+      // Fallback
+      const filtered = filterContacts(allContacts, audience.filters || {});
+      const ids = filtered.map((c) => c.id);
+      setSelectedContactIds(ids);
+      setOriginalContactIds(ids); // Track original state for diff calculation
+    }
   };
 
   const toggleContact = (contactId: string) => {
@@ -272,6 +588,46 @@ export function AudiencesPage() {
         ? prev.filter(id => id !== contactId)
         : [...prev, contactId]
     );
+  };
+
+  // View Contacts Dialog State
+  const [isViewContactsOpen, setIsViewContactsOpen] = useState(false);
+  const [viewContactsList, setViewContactsList] = useState<Contact[]>([]);
+  const [viewContactsLoading, setViewContactsLoading] = useState(false);
+
+  const handleViewContacts = async (audience: Audience) => {
+    setSelectedAudience(audience);
+    setIsViewContactsOpen(true);
+    setViewContactsLoading(true);
+    try {
+      const response = await audiencesApi.getContacts(audience.id, { page: 1, limit: 100 }); // Reasonable limit for viewing
+      if (response.success && response.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const responseData = response.data as any;
+        const contacts = responseData.contacts || responseData.data || (Array.isArray(responseData) ? responseData : []);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const normalized = contacts.map((c: any) => ({
+          ...c,
+          id: c.id || c.ID,
+          first_name: c.first_name || c.FirstName,
+          last_name: c.last_name || c.LastName,
+          email: c.email || c.Email,
+          property_type: c.property_type || c.PropertyType,
+          is_active: c.is_active !== undefined ? c.is_active : (c.IsActive !== undefined ? c.IsActive : true),
+        }));
+
+        // Filter out inactive contacts
+        const activeContacts = normalized.filter((c: any) => c.is_active !== false);
+
+        setViewContactsList(activeContacts);
+      } else {
+        toast({ title: 'Error', description: 'Failed to load contacts', variant: 'destructive' });
+      }
+    } catch (e) {
+      toast({ title: 'Error', description: 'Failed to load contacts', variant: 'destructive' });
+    } finally {
+      setViewContactsLoading(false);
+    }
   };
 
   const columns: Column<Audience>[] = [
@@ -307,10 +663,14 @@ export function AudiencesPage() {
       key: 'contacts',
       header: 'Contacts',
       cell: (audience) => (
-        <div className="flex items-center gap-1">
-          <Users className="w-4 h-4 text-muted-foreground" />
+        <Button
+          variant="ghost"
+          className="h-auto p-0 hover:bg-transparent hover:underline text-primary flex items-center gap-1 font-normal"
+          onClick={() => handleViewContacts(audience)}
+        >
+          <Users className="w-4 h-4" />
           {audience.contact_count.toLocaleString()}
-        </div>
+        </Button>
       ),
     },
     {
@@ -338,10 +698,13 @@ export function AudiencesPage() {
               <Pencil className="w-4 h-4 mr-2" />
               Edit
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => openManageMembers(audience)}>
-              <UserPlus className="w-4 h-4 mr-2" />
-              Manage Members
-            </DropdownMenuItem>
+            {/* Only allow Manage Members for manual audiences (no filters) */}
+            {(!audience.filters || Object.keys(audience.filters).length === 0) && (
+              <DropdownMenuItem onClick={() => openManageMembers(audience)}>
+                <UserPlus className="w-4 h-4 mr-2" />
+                Manage Members
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onClick={() => { setSelectedAudience(audience); setIsDeleteOpen(true); }}
               className="text-destructive"
@@ -394,7 +757,7 @@ export function AudiencesPage() {
           <DialogHeader>
             <DialogTitle>Create Audience</DialogTitle>
             <DialogDescription>
-              Create a new audience by filtering contacts or selecting them manually.
+              Create a new audience by filtering contacts.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -419,57 +782,13 @@ export function AudiencesPage() {
               </div>
             </div>
 
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'filter' | 'manual')}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="filter" className="gap-2">
-                  <Filter className="w-4 h-4" />
-                  Filter Contacts
-                </TabsTrigger>
-                <TabsTrigger value="manual" className="gap-2">
-                  <UserPlus className="w-4 h-4" />
-                  Manual Selection
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="filter" className="mt-4 space-y-4">
-                <AudienceFilterPanel
-                  contacts={mockContacts}
-                  filters={filters}
-                  onFiltersChange={setFilters}
-                  onApplyFilters={handleApplyFilters}
-                  matchingCount={matchingContacts.length}
-                />
-              </TabsContent>
-
-              <TabsContent value="manual" className="mt-4">
-                <ScrollArea className="h-[300px] border rounded-md p-4">
-                  <div className="space-y-2">
-                    {mockContacts.map((contact) => (
-                      <div
-                        key={contact.id}
-                        className="flex items-center space-x-3 p-2 rounded hover:bg-muted cursor-pointer"
-                        onClick={() => toggleContact(contact.id)}
-                      >
-                        <Checkbox
-                          checked={selectedContactIds.includes(contact.id)}
-                          onCheckedChange={() => toggleContact(contact.id)}
-                        />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">{contact.first_name} {contact.last_name}</p>
-                          <p className="text-xs text-muted-foreground">{contact.email}</p>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {contact.property_type || '-'}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {selectedContactIds.length} contact(s) selected
-                </p>
-              </TabsContent>
-            </Tabs>
+            <AudienceFilterPanel
+              contacts={allContacts}
+              filters={filters}
+              onFiltersChange={setFilters}
+              onApplyFilters={handleApplyFilters}
+              matchingCount={matchingContacts.length}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setIsCreateOpen(false); resetForm(); }}>
@@ -477,7 +796,7 @@ export function AudiencesPage() {
             </Button>
             <Button onClick={handleCreate} disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Create Audience ({selectedContactIds.length} contacts)
+              Create Audience ({matchingContacts.length} contacts)
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -495,7 +814,7 @@ export function AudiencesPage() {
           <DialogHeader>
             <DialogTitle>Edit Audience</DialogTitle>
             <DialogDescription>
-              Update audience details and filters.
+              Update audience name and description.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -519,14 +838,6 @@ export function AudiencesPage() {
                 />
               </div>
             </div>
-
-            <AudienceFilterPanel
-              contacts={mockContacts}
-              filters={filters}
-              onFiltersChange={setFilters}
-              onApplyFilters={handleApplyFilters}
-              matchingCount={matchingContacts.length}
-            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setIsEditOpen(false); resetForm(); }}>
@@ -571,7 +882,7 @@ export function AudiencesPage() {
 
               <TabsContent value="filter" className="mt-4 space-y-4">
                 <AudienceFilterPanel
-                  contacts={mockContacts}
+                  contacts={allContacts}
                   filters={filters}
                   onFiltersChange={setFilters}
                   onApplyFilters={handleApplyFilters}
@@ -582,7 +893,7 @@ export function AudiencesPage() {
               <TabsContent value="manual" className="mt-4">
                 <ScrollArea className="h-[300px] border rounded-md p-4">
                   <div className="space-y-2">
-                    {mockContacts.map((contact) => (
+                    {allContacts.map((contact) => (
                       <div
                         key={contact.id}
                         className="flex items-center space-x-3 p-2 rounded hover:bg-muted cursor-pointer"
@@ -620,6 +931,51 @@ export function AudiencesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* View Contacts Dialog */}
+      <Dialog open={isViewContactsOpen} onOpenChange={setIsViewContactsOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Contacts in "{selectedAudience?.name}"</DialogTitle>
+            <DialogDescription>
+              Viewing list of included contacts.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {viewContactsLoading ? (
+              <div className="flex justify-center items-center h-40">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <ScrollArea className="h-[400px] border rounded-md">
+                {viewContactsList.length > 0 ? (
+                  <div className="divide-y">
+                    {viewContactsList.map((contact) => (
+                      <div key={contact.id} className="p-3 flex items-center justify-between hover:bg-muted/50">
+                        <div>
+                          <p className="font-medium text-sm">{contact.first_name} {contact.last_name}</p>
+                          <p className="text-xs text-muted-foreground">{contact.email}</p>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {contact.property_type || '-'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-muted-foreground">
+                    No contacts found in this audience.
+                  </div>
+                )}
+              </ScrollArea>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsViewContactsOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
