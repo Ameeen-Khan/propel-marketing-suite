@@ -27,7 +27,6 @@ import {
   Plus,
   MoreHorizontal,
   Pencil,
-  Trash2,
   Send,
   Loader2,
   Code,
@@ -61,7 +60,6 @@ export function TemplatesPage() {
   // Dialog states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isTestSendOpen, setIsTestSendOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -251,34 +249,6 @@ export function TemplatesPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedTemplate) return;
-    setIsSubmitting(true);
-    try {
-      const response = await emailTemplatesApi.delete(selectedTemplate.id);
-      if (response.success) {
-        toast({ title: 'Template deleted', description: `${selectedTemplate.name} has been removed.` });
-        setIsDeleteOpen(false);
-        setSelectedTemplate(null);
-        fetchTemplates();
-      } else {
-        toast({
-          title: 'Error',
-          description: response.message || 'Failed to delete template',
-          variant: 'destructive'
-        });
-      }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete template',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleTestSend = async () => {
     if (!selectedTemplate || !testEmail) return;
     const emailResult = z.string().email().safeParse(testEmail);
@@ -379,13 +349,6 @@ export function TemplatesPage() {
             <DropdownMenuItem onClick={() => { setSelectedTemplate(template); setIsTestSendOpen(true); }}>
               <Send className="w-4 h-4 mr-2" />
               Test Send
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => { setSelectedTemplate(template); setIsDeleteOpen(true); }}
-              className="text-destructive"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -530,26 +493,6 @@ export function TemplatesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Template</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{selectedTemplate?.name}"? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Test Send Dialog */}
       <Dialog open={isTestSendOpen} onOpenChange={setIsTestSendOpen}>
