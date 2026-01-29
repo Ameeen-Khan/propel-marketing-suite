@@ -441,16 +441,6 @@ export const campaignsApi = {
       body: JSON.stringify(payload),
     }),
 
-  pause: (id: string) =>
-    apiFetch<Campaign>(`/agent/campaigns/${id}/pause`, {
-      method: 'POST',
-    }),
-
-  resume: (id: string) =>
-    apiFetch<Campaign>(`/agent/campaigns/${id}/resume`, {
-      method: 'POST',
-    }),
-
   getLogs: (id: string, params: PaginationParams) =>
     apiFetch<PaginatedResponse<CampaignLog>>(`/agent/campaigns/${id}/logs?${buildQueryString(params)}`),
 };

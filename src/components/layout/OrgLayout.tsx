@@ -75,7 +75,6 @@ export function OrgLayout() {
         const data = responseData.notifications || responseData.data || (Array.isArray(responseData) ? responseData : []);
 
         // Normalize
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const normalized = data.map((n: any) => ({
           id: n.id || n.ID,
           title: n.title || n.Title,

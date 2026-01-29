@@ -134,7 +134,6 @@ export function AudiencesPage() {
       console.log('AudiencePage - Contacts Response:', response);
 
       if (response && response.success && response.data) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const responseData = response.data as any;
         const contactsData = responseData.contacts || responseData.data || (Array.isArray(responseData) ? responseData : []);
 
@@ -145,7 +144,6 @@ export function AudiencesPage() {
         }
 
         // Normalize if needed
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const normalized = contactsData.map((c: any) => ({
           ...c,
           id: c.id || c.ID,
@@ -197,7 +195,6 @@ export function AudiencesPage() {
         }
 
         // Normalize
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let normalized = audiencesData.map((a: any) => {
           let count = 0;
 
@@ -209,8 +206,6 @@ export function AudiencesPage() {
             );
             count = activeContacts.length;
           } else if (a.contact_count !== undefined) {
-            // Note: If backend sends just a number, it might include inactive ones if backend logic isn't updated.
-            // But we can't filter without the list.
             count = a.contact_count;
           } else if (a.ContactCount !== undefined) {
             count = a.ContactCount;
@@ -545,14 +540,10 @@ export function AudiencesPage() {
     setFilters(audience.filters || {});
     setIsManageMembersOpen(true);
 
-    // Initial loading state could be helpful here
     try {
       // Fetch actual assigned contacts from backend
-      // Note: This fetches the first page. If an audience has >1000 members, this simple UI might struggle.
-      // We'll assume for this "Manage Members" manual view, the audience is manageable directly.
       const response = await audiencesApi.getContacts(audience.id, { page: 1, limit: 1000 });
       if (response.success && response.data) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const responseData = response.data as any;
         const contacts = responseData.contacts || responseData.data || (Array.isArray(responseData) ? responseData : []);
 
@@ -561,12 +552,10 @@ export function AudiencesPage() {
           (c.is_active !== undefined ? c.is_active : (c.IsActive !== undefined ? c.IsActive : true)) !== false
         );
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ids = activeContacts.map((c: any) => c.id || c.ID);
         setSelectedContactIds(ids);
         setOriginalContactIds(ids); // Track original state for diff calculation
       } else {
-        // Fallback to filter calculation if fetch fails or is empty (and we trust filters)
         const filtered = filterContacts(allContacts, audience.filters || {});
         const ids = filtered.map((c) => c.id);
         setSelectedContactIds(ids);

@@ -94,13 +94,11 @@ export function TemplatesPage() {
       });
 
       if (response.success && response.data) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const responseData = response.data as any;
         // Prioritize 'templates' array similar to how contacts was 'contacts'
         const templatesData = responseData.templates || responseData.data || (Array.isArray(responseData) ? responseData : []);
 
         // Normalize if needed (PascalCase to snake_case)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const normalizedTemplates = templatesData.map((template: any) => ({
           ...template,
           id: template.id || template.ID,

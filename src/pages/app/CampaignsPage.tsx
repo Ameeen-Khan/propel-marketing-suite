@@ -34,8 +34,6 @@ import {
   Plus,
   MoreHorizontal,
   Pencil,
-  Pause,
-  Play,
   FileText,
   Loader2,
   Calendar,
@@ -84,6 +82,16 @@ export function CampaignsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
+  const days = {
+    "0": "Sunday",
+    "1": "Monday",
+    "2": "Tuesday",
+    "3": "Wednesday",
+    "4": "Thursday",
+    "5": "Friday",
+    "6": "Saturday"
+  }
+
   const [formData, setFormData] = useState({
     name: '',
     template_id: '',
@@ -111,12 +119,10 @@ export function CampaignsPage() {
       console.log('CampaignsPage - Templates Response:', response); // DEBUG LOG
 
       if (response.success && response.data) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const responseData = response.data as any;
         const templatesData = responseData.templates || responseData.data || (Array.isArray(responseData) ? responseData : []);
 
-        // Normalize 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // Normalize
         const normalized = templatesData.map((t: any) => ({
           id: t.id || t.ID,
           name: t.name || t.Name
@@ -135,12 +141,10 @@ export function CampaignsPage() {
       console.log('CampaignsPage - Audiences Response:', response); // DEBUG LOG
 
       if (response.success && response.data) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const responseData = response.data as any;
         const audiencesData = responseData.audiences || responseData.data || (Array.isArray(responseData) ? responseData : []);
 
         // Normalize
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const normalized = audiencesData.map((a: any) => ({
           id: a.id || a.ID,
           name: a.name || a.Name,
@@ -168,12 +172,10 @@ export function CampaignsPage() {
       console.log('CampaignsPage - Campaigns Response:', response);
 
       if (response && response.success && response.data) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const responseData = response.data as any;
         const campaignsData = responseData.campaigns || responseData.data || (Array.isArray(responseData) ? responseData : []);
 
         // Normalize
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const normalized = campaignsData.map((c: any) => {
           // Backend now returns recurrence as a string ("daily", "weekly", "monthly")
           const recurrence = c.recurrence || c.Recurrence;
@@ -423,31 +425,6 @@ export function CampaignsPage() {
     }
   };
 
-  const handlePauseResume = async (campaign: Campaign) => {
-    try {
-      const response = campaign.status === 'running'
-        ? await campaignsApi.pause(campaign.id)
-        : await campaignsApi.resume(campaign.id);
-
-      if (response.success) {
-        const action = campaign.status === 'running' ? 'paused' : 'resumed';
-        toast({ title: `Campaign ${action}`, description: `${campaign.name} has been ${action}.` });
-        fetchCampaigns();
-      } else {
-        toast({
-          title: 'Error',
-          description: response.message || 'Failed to update campaign',
-          variant: 'destructive'
-        });
-      }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to update campaign',
-        variant: 'destructive'
-      });
-    }
-  };
 
   const openEdit = (campaign: Campaign) => {
     setSelectedCampaign(campaign);
@@ -544,21 +521,6 @@ export function CampaignsPage() {
               <Pencil className="w-4 h-4 mr-2" />
               Edit
             </DropdownMenuItem>
-            {(campaign.status === 'running' || campaign.status === 'paused') && (
-              <DropdownMenuItem onClick={() => handlePauseResume(campaign)}>
-                {campaign.status === 'running' ? (
-                  <>
-                    <Pause className="w-4 h-4 mr-2" />
-                    Pause
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 mr-2" />
-                    Resume
-                  </>
-                )}
-              </DropdownMenuItem>
-            )}
             <DropdownMenuItem onClick={() => { setSelectedCampaign(campaign); setIsLogsOpen(true); }}>
               <FileText className="w-4 h-4 mr-2" />
               View Logs
@@ -729,13 +691,11 @@ export function CampaignsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="0">Sunday</SelectItem>
-                        <SelectItem value="1">Monday</SelectItem>
-                        <SelectItem value="2">Tuesday</SelectItem>
-                        <SelectItem value="3">Wednesday</SelectItem>
-                        <SelectItem value="4">Thursday</SelectItem>
-                        <SelectItem value="5">Friday</SelectItem>
-                        <SelectItem value="6">Saturday</SelectItem>
+                        {Object.entries(days).map(([key, value]) => (
+                          <SelectItem key={key} value={key}>
+                            {value}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

@@ -92,12 +92,8 @@ A modern, full-featured email marketing platform built with React, TypeScript, a
 
 ### State Management & Data Fetching
 - **React Router DOM 6.30.1** - Client-side routing
-- **TanStack Query 5.83.0** - Server state management
 - **React Hook Form 7.61.1** - Form state management
 - **Zod 3.25.76** - Schema validation
-
-### Charts & Visualization
-- **Recharts 2.15.4** - Composable charting library
 
 ### Development Tools
 - **ESLint 9.32.0** - Code linting

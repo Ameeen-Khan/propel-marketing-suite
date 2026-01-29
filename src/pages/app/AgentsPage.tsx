@@ -84,11 +84,10 @@ export function AgentsPage() {
 
       if (response.success && response.data) {
         // Normalize data
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const responseData = response.data as any;
+        console.log(responseData)
         const agentsData = responseData.data || (Array.isArray(responseData) ? responseData : []);
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const normalizedAgents = agentsData.map((agent: any) => ({
           ...agent,
           id: agent.id || agent.ID,
