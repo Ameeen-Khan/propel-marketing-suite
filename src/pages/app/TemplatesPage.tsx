@@ -27,29 +27,25 @@ import {
   Plus,
   MoreHorizontal,
   Pencil,
-  Trash2,
   Send,
   Loader2,
   Code,
   FileText,
 } from 'lucide-react';
 import { z } from 'zod';
+import { emailTemplatesApi } from '@/services/api';
 
 const templateSchema = z.object({
   name: z.string().min(1, 'Template name is required').max(100),
   subject: z.string().min(1, 'Subject is required').max(200),
   preheader: z.string().max(200).optional(),
   from_name: z.string().min(1, 'From name is required').max(100),
-  html_body: z.string().min(1, 'HTML body is required'),
-  plain_text_body: z.string().min(1, 'Plain text body is required'),
+  html_body: z.string().optional(),
+  plain_text_body: z.string().optional(),
+}).refine(data => data.html_body || data.plain_text_body, {
+  message: "At least one of HTML body or Plain Text body is required",
+  path: ["html_body"]
 });
-
-// Mock data
-const mockTemplates: EmailTemplate[] = [
-  { id: '1', name: 'Welcome Email', subject: 'Welcome to {{company_name}}!', preheader: 'Start your journey', from_name: 'Acme Real Estate', html_body: '<h1>Welcome!</h1><p>Thank you for joining us.</p>', plain_text_body: 'Welcome! Thank you for joining us.', created_at: '2024-01-15', updated_at: '2024-01-15' },
-  { id: '2', name: 'New Listing Alert', subject: 'New Property: {{property_name}}', preheader: 'Check out this listing', from_name: 'Listings Team', html_body: '<h1>New Listing</h1><p>We found a property you might like.</p>', plain_text_body: 'New Listing: We found a property you might like.', created_at: '2024-02-20', updated_at: '2024-03-01' },
-  { id: '3', name: 'Monthly Newsletter', subject: 'Your Monthly Market Update', preheader: 'Market trends and tips', from_name: 'Newsletter', html_body: '<h1>Monthly Update</h1><p>Here is your market update.</p>', plain_text_body: 'Monthly Update: Here is your market update.', created_at: '2024-03-10', updated_at: '2024-03-15' },
-];
 
 export function TemplatesPage() {
   const { toast } = useToast();
@@ -64,7 +60,6 @@ export function TemplatesPage() {
   // Dialog states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isTestSendOpen, setIsTestSendOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,19 +84,55 @@ export function TemplatesPage() {
 
   const fetchTemplates = async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    let filtered = [...mockTemplates];
-    if (search) {
-      filtered = filtered.filter(template =>
-        template.name.toLowerCase().includes(search.toLowerCase()) ||
-        template.subject.toLowerCase().includes(search.toLowerCase())
-      );
+    try {
+      const response = await emailTemplatesApi.list({
+        page,
+        limit,
+        search,
+        sort_by: 'updated_at',
+        sort_order: 'desc'
+      });
+
+      if (response.success && response.data) {
+        const responseData = response.data as any;
+        // Prioritize 'templates' array similar to how contacts was 'contacts'
+        const templatesData = responseData.templates || responseData.data || (Array.isArray(responseData) ? responseData : []);
+
+        // Normalize if needed (PascalCase to snake_case)
+        const normalizedTemplates = templatesData.map((template: any) => ({
+          ...template,
+          id: template.id || template.ID,
+          name: template.name || template.Name,
+          subject: template.subject || template.Subject,
+          preheader: template.preheader || template.Preheader,
+          from_name: template.from_name || template.FromName,
+          html_body: template.html_body || template.HtmlBody,
+          plain_text_body: template.plain_text_body || template.PlainTextBody,
+          created_at: template.created_at || template.CreatedAt || new Date().toISOString(),
+          updated_at: template.updated_at || template.UpdatedAt || new Date().toISOString(),
+          organization_id: template.organization_id || template.OrganizationID,
+        }));
+
+        setTemplates(normalizedTemplates);
+        setTotal(responseData.total || normalizedTemplates.length || 0);
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to load templates',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load templates',
+        variant: 'destructive'
+      });
+      setTemplates([]);
+      setTotal(0);
+    } finally {
+      setIsLoading(false);
     }
-    
-    setTotal(filtered.length);
-    setTemplates(filtered.slice((page - 1) * limit, page * limit));
-    setIsLoading(false);
   };
 
   const resetForm = () => {
@@ -118,60 +149,102 @@ export function TemplatesPage() {
 
   const handleCreate = async () => {
     setFormErrors({});
-    const result = templateSchema.safeParse(formData);
+
+    // Auto-generate plain text logic removed
+    const submissionData = { ...formData };
+
+    const result = templateSchema.safeParse(submissionData);
     if (!result.success) {
       const errors: Record<string, string> = {};
       result.error.errors.forEach((err) => {
         errors[err.path[0] as string] = err.message;
       });
       setFormErrors(errors);
+
+      // Show toast for validation error since fields might be in hidden tabs
+      toast({
+        title: 'Validation Error',
+        description: 'Please check the form for errors. Ensure both HTML and Plain Text bodies are filled.',
+        variant: 'destructive'
+      });
       return;
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({ title: 'Template created', description: `${formData.name} has been created.` });
-    setIsCreateOpen(false);
-    resetForm();
-    fetchTemplates();
-    setIsSubmitting(false);
+    try {
+      const response = await emailTemplatesApi.create(submissionData);
+      if (response.success) {
+        toast({ title: 'Template created', description: `${submissionData.name} has been created.` });
+        setIsCreateOpen(false);
+        resetForm();
+        fetchTemplates();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to create template',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to create template',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleEdit = async () => {
     if (!selectedTemplate) return;
     setFormErrors({});
-    const result = templateSchema.safeParse(formData);
+
+    // Auto-generate plain text logic removed
+    const submissionData = { ...formData };
+
+    const result = templateSchema.safeParse(submissionData);
     if (!result.success) {
       const errors: Record<string, string> = {};
       result.error.errors.forEach((err) => {
         errors[err.path[0] as string] = err.message;
       });
       setFormErrors(errors);
+
+      // Show toast for validation error
+      toast({
+        title: 'Validation Error',
+        description: 'Please check the form for errors. Ensure both HTML and Plain Text bodies are filled.',
+        variant: 'destructive'
+      });
       return;
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({ title: 'Template updated', description: 'Template has been updated.' });
-    setIsEditOpen(false);
-    setSelectedTemplate(null);
-    resetForm();
-    fetchTemplates();
-    setIsSubmitting(false);
-  };
-
-  const handleDelete = async () => {
-    if (!selectedTemplate) return;
-    setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({ title: 'Template deleted', description: `${selectedTemplate.name} has been removed.` });
-    setIsDeleteOpen(false);
-    setSelectedTemplate(null);
-    fetchTemplates();
-    setIsSubmitting(false);
+    try {
+      const response = await emailTemplatesApi.update(selectedTemplate.id, submissionData);
+      if (response.success) {
+        toast({ title: 'Template updated', description: 'Template has been updated.' });
+        setIsEditOpen(false);
+        setSelectedTemplate(null);
+        resetForm();
+        fetchTemplates();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to update template',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update template',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleTestSend = async () => {
@@ -183,13 +256,35 @@ export function TemplatesPage() {
     }
 
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    toast({ title: 'Test email sent', description: `Test email sent to ${testEmail}` });
-    setIsTestSendOpen(false);
-    setTestEmail('');
-    setSelectedTemplate(null);
-    setIsSubmitting(false);
+    try {
+      // Backend error "test_email is required" confirmed we need this exact key
+      const payload = { test_email: testEmail };
+      console.log('Sending test email payload:', payload);
+
+      const response = await emailTemplatesApi.testSend(selectedTemplate.id, payload as any);
+      console.log('Test send response:', response);
+
+      if (response.success) {
+        toast({ title: 'Test email sent', description: `Test email sent to ${testEmail}` });
+        setIsTestSendOpen(false);
+        setTestEmail('');
+        setSelectedTemplate(null);
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'Failed to send test email',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to send test email',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const openEdit = (template: EmailTemplate) => {
@@ -252,13 +347,6 @@ export function TemplatesPage() {
             <DropdownMenuItem onClick={() => { setSelectedTemplate(template); setIsTestSendOpen(true); }}>
               <Send className="w-4 h-4 mr-2" />
               Test Send
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => { setSelectedTemplate(template); setIsDeleteOpen(true); }}
-              className="text-destructive"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -403,26 +491,6 @@ export function TemplatesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Template</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{selectedTemplate?.name}"? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Test Send Dialog */}
       <Dialog open={isTestSendOpen} onOpenChange={setIsTestSendOpen}>

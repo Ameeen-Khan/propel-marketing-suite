@@ -159,7 +159,7 @@ export function DataTable<T>({
 
       {/* Pagination */}
       <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground invisible">
           <span>Rows per page:</span>
           <Select
             value={limit.toString()}

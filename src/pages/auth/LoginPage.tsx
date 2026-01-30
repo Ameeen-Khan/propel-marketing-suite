@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,6 @@ export function LoginPage() {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
   const { login } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
 
@@ -68,12 +67,13 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary/30 p-4">
       <div className="w-full max-w-md animate-fade-in">
         {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center mb-4 shadow-lg">
-            <Building2 className="w-7 h-7 text-primary-foreground" />
+        <div className="flex flex-col items-center mb-10 space-y-3">
+          <div className="p-3 rounded-xl bg-secondary/20 backdrop-blur-sm">
+            <img src="/logo.png" alt="Propel" className="w-auto h-16 object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Real Estate Marketing</h1>
-          <p className="text-muted-foreground mt-1">Platform</p>
+          <p className="text-sm font-medium tracking-[0.2em] text-muted-foreground uppercase text-center">
+            Marketing Suite
+          </p>
         </div>
 
         <Card className="border-border/50 shadow-xl">
@@ -143,17 +143,6 @@ export function LoginPage() {
                 )}
               </Button>
             </form>
-
-            {/* Demo credentials hint */}
-            <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-              <p className="text-xs text-muted-foreground mb-2 font-medium">Demo credentials:</p>
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p><span className="font-mono">super@demo.com</span> — Super Admin</p>
-                <p><span className="font-mono">admin@demo.com</span> — Org Admin</p>
-                <p><span className="font-mono">user@demo.com</span> — Org User</p>
-                <p className="mt-1 italic">Any password works for demo</p>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

@@ -86,6 +86,7 @@ export interface Contact {
   bathrooms?: number;
   square_feet?: number;
   preferred_location?: string;
+  is_active?: boolean;
   created_at: string;
 }
 
@@ -103,7 +104,7 @@ export interface CreateContactPayload {
   preferred_location?: string;
 }
 
-export interface UpdateContactPayload extends Partial<CreateContactPayload> {}
+export interface UpdateContactPayload extends Partial<CreateContactPayload> { }
 
 // Audience Filter types
 export interface AudienceFilters {
@@ -166,10 +167,11 @@ export interface CreateEmailTemplatePayload {
   plain_text_body: string;
 }
 
-export interface UpdateEmailTemplatePayload extends Partial<CreateEmailTemplatePayload> {}
+export interface UpdateEmailTemplatePayload extends Partial<CreateEmailTemplatePayload> { }
 
 export interface TestSendPayload {
-  email: string;
+  email?: string;
+  test_email?: string;
 }
 
 // Campaign types
@@ -209,30 +211,49 @@ export interface CreateCampaignPayload {
   recurrence?: CampaignRecurrence;
 }
 
-export interface UpdateCampaignPayload extends Partial<CreateCampaignPayload> {}
+export interface UpdateCampaignPayload extends Partial<CreateCampaignPayload> { }
 
 export interface CampaignLog {
   id: string;
   campaign_id: string;
   contact_id: string;
-  contact_email: string;
-  status: 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'failed';
+  recipient_email: string;
+  status: 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'failed' | 'unknown';
+  error_message?: string;
   sent_at: string;
   opened_at?: string;
   clicked_at?: string;
+  created_at: string;
 }
 
 // Notification types
-export type NotificationType = 'info' | 'success' | 'warning' | 'error';
+export type NotificationType = 'campaign_sent' | 'csv_import_completed' | 'csv_import_failed' | 'agent_added' | 'info' | 'success' | 'warning' | 'error';
 
 export interface Notification {
   id: string;
-  title: string;
-  message: string;
+  ID?: string;
+  organization_id?: string;
+  OrganizationID?: string;
+  user_id?: string;
+  UserID?: string;
   notification_type: NotificationType;
+  NotificationType?: NotificationType;
+  title: string;
+  Title?: string;
+  message: string;
+  Message?: string;
+  related_user_id?: string | null;
+  RelatedUserID?: string | null;
+  related_campaign_id?: string | null;
+  RelatedCampaignID?: string | null;
   is_read: boolean;
+  IsRead?: boolean;
+  read_at?: string | null;
+  ReadAt?: string | null;
   created_at: string;
+  CreatedAt?: string;
 }
+
 
 // CSV Import types
 export interface CSVImportJob {

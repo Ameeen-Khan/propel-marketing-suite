@@ -48,15 +48,18 @@
 
     --radius: 0.5rem;
 
+
     /* Sidebar - Super Admin layout */
     --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 200 98% 39%;
     --sidebar-primary-foreground: 204 100% 97%;
     --sidebar-accent: 215 24% 26%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 212 26% 83%;
+    --sidebar-border: 215 19% 25%;
     --sidebar-ring: 200 98% 39%;
+
+
 
     /* Org Sidebar - Lighter variant */
     --org-sidebar-background: 220 14% 97%;
@@ -184,6 +187,7 @@
 }
 
 @layer components {
+
   /* Page container */
   .page-container {
     @apply p-6 lg:p-8 max-w-7xl mx-auto;
@@ -290,6 +294,7 @@
 }
 
 @layer utilities {
+
   /* Focus ring utility */
   .focus-ring {
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background;
@@ -313,6 +318,7 @@
       opacity: 0;
       transform: translateY(-4px);
     }
+
     to {
       opacity: 1;
       transform: translateY(0);
@@ -328,6 +334,7 @@
       opacity: 0;
       transform: translateX(-8px);
     }
+
     to {
       opacity: 1;
       transform: translateX(0);

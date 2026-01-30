@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User, LoginCredentials, AuthState, UserRole } from '@/types';
+import { setAuthToken } from '@/services/api';
 
 interface AuthContextType extends AuthState {
   login: (credentials: LoginCredentials) => Promise<void>;
@@ -9,8 +10,8 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const TOKEN_KEY = 'remp_auth_token';
-const USER_KEY = 'remp_auth_user';
+const TOKEN_KEY = 'propel_auth_token';
+const USER_KEY = 'propel_auth_user';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
@@ -22,85 +23,96 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Initialize auth state from storage
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY);
-    const userStr = localStorage.getItem(USER_KEY);
-    
-    if (token && userStr) {
-      try {
-        const user = JSON.parse(userStr) as User;
-        setState({
-          user,
-          token,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-      } catch {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(USER_KEY);
+    const initAuth = () => {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const userStr = localStorage.getItem(USER_KEY);
+
+      if (token && userStr) {
+        try {
+          const user = JSON.parse(userStr) as User;
+          setAuthToken(token); // Ensure API service has the token
+          setState({
+            user,
+            token,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        } catch {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(USER_KEY);
+          setAuthToken(null);
+          setState(prev => ({ ...prev, isLoading: false }));
+        }
+      } else {
+        setAuthToken(null);
         setState(prev => ({ ...prev, isLoading: false }));
       }
-    } else {
-      setState(prev => ({ ...prev, isLoading: false }));
-    }
+    };
+
+    initAuth();
+
+    // Listen for storage events (e.g. logout in another tab)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === TOKEN_KEY || e.key === USER_KEY) {
+        initAuth();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   const login = useCallback(async (credentials: LoginCredentials) => {
-    // TODO: Replace with actual API call
-    // For now, simulate login with mock data
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Call the actual backend API
+    const { authApi, setAuthToken } = await import('@/services/api');
 
-    // Mock response based on email
-    let mockUser: User;
-    
-    if (credentials.email.includes('super')) {
-      mockUser = {
-        id: '1',
-        email: credentials.email,
-        name: 'Super Admin',
-        role: 'super_admin',
-        is_active: true,
-        is_password_set: true,
-      };
-    } else if (credentials.email.includes('admin')) {
-      mockUser = {
-        id: '2',
-        email: credentials.email,
-        name: 'Org Admin',
-        role: 'org_admin',
-        organization_id: 'org-1',
-        organization_name: 'Acme Real Estate',
-        is_active: true,
-        is_password_set: true,
-      };
-    } else {
-      mockUser = {
-        id: '3',
-        email: credentials.email,
-        name: 'Org User',
-        role: 'org_user',
-        organization_id: 'org-1',
-        organization_name: 'Acme Real Estate',
-        is_active: true,
-        is_password_set: true,
-      };
+    const response = await authApi.login(credentials);
+
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Login failed');
     }
 
-    const mockToken = 'mock-jwt-token-' + Date.now();
+    const { token, user: userData } = response.data;
 
-    localStorage.setItem(TOKEN_KEY, mockToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(mockUser));
+    // Map backend user data to frontend User type
+    const user: User = {
+      id: userData.id,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role as UserRole,
+      organization_id: userData.organization_id,
+      organization_name: userData.organization_name,
+      is_active: true,
+      is_password_set: true,
+    };
+
+    // Store token in API service
+    setAuthToken(token);
+
+    // Store in localStorage
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
 
     setState({
-      user: mockUser,
-      token: mockToken,
+      user,
+      token,
       isAuthenticated: true,
       isLoading: false,
     });
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // Call backend logout (currently client-side only)
+    const { authApi, setAuthToken } = await import('@/services/api');
+    await authApi.logout();
+
+    // Clear token from API service
+    setAuthToken(null);
+
+    // Clear localStorage
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+
     setState({
       user: null,
       token: null,
