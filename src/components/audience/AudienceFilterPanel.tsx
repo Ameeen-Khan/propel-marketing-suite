@@ -9,8 +9,39 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Contact, AudienceFilters } from '@/types';
 import { Filter, ChevronDown, X } from 'lucide-react';
+
+const SQFT_OPTIONS = [
+  { label: "500 sq ft", value: "500" },
+  { label: "1,000 sq ft", value: "1000" },
+  { label: "1,500 sq ft", value: "1500" },
+  { label: "2,000 sq ft", value: "2000" },
+  { label: "2,500 sq ft", value: "2500" },
+  { label: "3,000 sq ft", value: "3000" },
+  { label: "3,500 sq ft", value: "3500" },
+  { label: "4,000 sq ft", value: "4000" },
+  { label: "5,000+ sq ft", value: "5000" },
+];
+
+const BUDGET_OPTIONS = [
+  { label: "₹30L", value: "3000000" },
+  { label: "₹50L", value: "5000000" },
+  { label: "₹1Cr", value: "10000000" },
+  { label: "₹2Cr", value: "20000000" },
+  { label: "₹3Cr", value: "30000000" },
+  { label: "₹5Cr", value: "50000000" },
+  { label: "₹10Cr", value: "100000000" },
+  { label: "₹20Cr", value: "200000000" },
+  { label: "₹50Cr", value: "500000000" },
+];
 
 interface AudienceFilterPanelProps {
   contacts: Contact[];
@@ -110,9 +141,8 @@ export function AudienceFilterPanel({
                 {matchingCount} matching
               </span>
               <ChevronDown
-                className={`w-4 h-4 text-muted-foreground transition-transform ${
-                  isExpanded ? 'rotate-180' : ''
-                }`}
+                className={`w-4 h-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''
+                  }`}
               />
             </div>
           </button>
@@ -195,30 +225,46 @@ export function AudienceFilterPanel({
               </Label>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Input
-                    type="number"
-                    placeholder="Min ($)"
-                    value={filters.budget_min || ''}
-                    onChange={(e) =>
+                  <Select
+                    value={filters.budget_min?.toString() || ''}
+                    onValueChange={(value) =>
                       onFiltersChange({
                         ...filters,
-                        budget_min: e.target.value ? Number(e.target.value) : undefined,
+                        budget_min: value === "none" ? undefined : Number(value),
                       })
                     }
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Min Budget" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {BUDGET_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
-                  <Input
-                    type="number"
-                    placeholder="Max ($)"
-                    value={filters.budget_max || ''}
-                    onChange={(e) =>
+                  <Select
+                    value={filters.budget_max?.toString() || ''}
+                    onValueChange={(value) =>
                       onFiltersChange({
                         ...filters,
-                        budget_max: e.target.value ? Number(e.target.value) : undefined,
+                        budget_max: value === "none" ? undefined : Number(value),
                       })
                     }
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Max Budget" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {BUDGET_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
@@ -230,30 +276,46 @@ export function AudienceFilterPanel({
               </Label>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Input
-                    type="number"
-                    placeholder="Min sq ft"
-                    value={filters.square_feet_min || ''}
-                    onChange={(e) =>
+                  <Select
+                    value={filters.square_feet_min?.toString() || ''}
+                    onValueChange={(value) =>
                       onFiltersChange({
                         ...filters,
-                        square_feet_min: e.target.value ? Number(e.target.value) : undefined,
+                        square_feet_min: value === "none" ? undefined : Number(value),
                       })
                     }
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Min Sq Ft" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {SQFT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
-                  <Input
-                    type="number"
-                    placeholder="Max sq ft"
-                    value={filters.square_feet_max || ''}
-                    onChange={(e) =>
+                  <Select
+                    value={filters.square_feet_max?.toString() || ''}
+                    onValueChange={(value) =>
                       onFiltersChange({
                         ...filters,
-                        square_feet_max: e.target.value ? Number(e.target.value) : undefined,
+                        square_feet_max: value === "none" ? undefined : Number(value),
                       })
                     }
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Max Sq Ft" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {SQFT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>

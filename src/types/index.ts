@@ -151,7 +151,7 @@ export interface EmailTemplate {
   name: string;
   subject: string;
   preheader?: string;
-  from_name: string;
+  from_name?: string;
   html_body: string;
   plain_text_body: string;
   created_at: string;
@@ -162,7 +162,7 @@ export interface CreateEmailTemplatePayload {
   name: string;
   subject: string;
   preheader?: string;
-  from_name: string;
+  from_name?: string;
   html_body: string;
   plain_text_body: string;
 }
@@ -256,6 +256,14 @@ export interface Notification {
 
 
 // CSV Import types
+export interface CSVImportResponse {
+  message: string;
+  total_records: number;
+  imported_records: number;
+  skipped_records: number;
+  errors?: string[];
+}
+
 export interface CSVImportJob {
   id: string;
   file_name: string;
@@ -267,6 +275,10 @@ export interface CSVImportJob {
   errors?: string[];
   created_at: string;
   completed_at?: string;
+  // Included in synchronous response
+  imported_records?: number;
+  skipped_records?: number;
+  total_records?: number;
 }
 
 // Pagination types
@@ -284,6 +296,8 @@ export interface PaginatedResponse<T> {
   page: number;
   limit: number;
   total_pages: number;
+  offset_start?: number;
+  offset_end?: number;
 }
 
 // API Response types

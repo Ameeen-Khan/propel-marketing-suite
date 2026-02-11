@@ -74,14 +74,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { token, user: userData } = response.data;
 
-    // Map backend user data to frontend User type
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawUser = userData as any;
+
+    // Map backend user data to frontend User type with robust casing handling
     const user: User = {
-      id: userData.id,
-      email: userData.email,
-      name: userData.name,
-      role: userData.role as UserRole,
-      organization_id: userData.organization_id,
-      organization_name: userData.organization_name,
+      id: rawUser.id || rawUser.ID,
+      email: rawUser.email || rawUser.Email,
+      name: rawUser.name || rawUser.Name,
+      role: (rawUser.role || rawUser.Role) as UserRole,
+      organization_id: rawUser.organization_id || rawUser.OrganizationID || rawUser.organization?.id || rawUser.Organization?.ID,
+      organization_name: rawUser.organization_name || rawUser.OrganizationName || rawUser.organization?.name || rawUser.Organization?.Name,
       is_active: true,
       is_password_set: true,
     };

@@ -24,6 +24,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Audience, Contact, AudienceFilters } from '@/types';
 import { AudienceFilterPanel } from '@/components/audience/AudienceFilterPanel';
+import { cn, formatDate } from '@/lib/utils';
 import {
   Plus,
   MoreHorizontal,
@@ -92,8 +93,9 @@ export function AudiencesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState('');
   const [total, setTotal] = useState(0);
+  const [offsetStart, setOffsetStart] = useState<number | undefined>(undefined);
+  const [offsetEnd, setOffsetEnd] = useState<number | undefined>(undefined);
 
   // Dialog states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -122,7 +124,7 @@ export function AudiencesPage() {
 
   useEffect(() => {
     fetchAudiences();
-  }, [page, limit, search, allContacts]); // Re-run when contacts change to update counts
+  }, [page, limit, allContacts]); // Re-run when contacts change to update counts
 
   useEffect(() => {
     fetchAllContacts();
@@ -176,7 +178,6 @@ export function AudiencesPage() {
       const response = await audiencesApi.list({
         page,
         limit,
-        search,
         sort_by: 'created_at',
         sort_order: 'desc'
       });
@@ -225,7 +226,7 @@ export function AudiencesPage() {
             description: a.description || a.Description,
             filters: a.filters || a.Filters,
             contact_count: count,
-            created_at: (a.created_at || a.CreatedAt || new Date().toISOString()).replace(/Z$/, ''),
+            created_at: a.created_at || a.CreatedAt || new Date().toISOString(),
             _needsContactFetch: !Array.isArray(a.contacts) && (!a.filters || Object.keys(a.filters).length === 0) // Flag manual audiences that need fetching
           };
         });
@@ -265,17 +266,12 @@ export function AudiencesPage() {
         }
 
 
-        // Client-side filtering if backend search isn't effective
-        if (search) {
-          const lowerSearch = search.toLowerCase();
-          normalized = normalized.filter((a: any) =>
-            a.name.toLowerCase().includes(lowerSearch) ||
-            (a.description && a.description.toLowerCase().includes(lowerSearch))
-          );
-        }
+
 
         setAudiences(normalized);
         setTotal(responseData.total || normalized.length || 0);
+        setOffsetStart(responseData.offset_start);
+        setOffsetEnd(responseData.offset_end);
       } else {
         console.error('AudiencePage - Fetch failed:', response);
         toast({
@@ -635,20 +631,6 @@ export function AudiencesPage() {
       ),
     },
     {
-      key: 'filters',
-      header: 'Filters',
-      cell: (audience) => (
-        audience.filters && Object.keys(audience.filters).length > 0 ? (
-          <div className="flex items-center gap-1 text-primary">
-            <Filter className="w-3 h-3" />
-            <span className="text-xs">Active</span>
-          </div>
-        ) : (
-          <span className="text-muted-foreground text-xs">None</span>
-        )
-      ),
-    },
-    {
       key: 'contacts',
       header: 'Contacts',
       cell: (audience) => (
@@ -667,7 +649,7 @@ export function AudiencesPage() {
       header: 'Created',
       cell: (audience) => (
         <span className="text-muted-foreground">
-          {new Date(audience.created_at).toLocaleDateString()}
+          {formatDate(audience.created_at)}
         </span>
       ),
     },
@@ -726,11 +708,12 @@ export function AudiencesPage() {
         total={total}
         page={page}
         limit={limit}
+        offsetStart={offsetStart}
+        offsetEnd={offsetEnd}
         totalPages={Math.ceil(total / limit)}
         onPageChange={setPage}
         onLimitChange={(newLimit) => { setLimit(newLimit); setPage(1); }}
-        onSearch={(value) => { setSearch(value); setPage(1); }}
-        searchPlaceholder="Search audiences..."
+
         isLoading={isLoading}
         emptyMessage="No audiences found"
       />

@@ -5,6 +5,7 @@ import { DataTable, Column } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { formatDateTime } from '@/lib/utils';
 
 interface CampaignLogsViewerProps {
     campaignId?: string;
@@ -15,6 +16,8 @@ export function CampaignLogsViewer({ campaignId, isOpen }: CampaignLogsViewerPro
     const [logs, setLogs] = useState<CampaignLog[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [total, setTotal] = useState(0);
+    const [offsetStart, setOffsetStart] = useState<number | undefined>(undefined);
+    const [offsetEnd, setOffsetEnd] = useState<number | undefined>(undefined);
     const [page, setPage] = useState(1);
     const [limit, setLimit] = useState(10);
     const { toast } = useToast();
@@ -25,6 +28,8 @@ export function CampaignLogsViewer({ campaignId, isOpen }: CampaignLogsViewerPro
         } else {
             setLogs([]);
             setTotal(0);
+            setOffsetStart(undefined);
+            setOffsetEnd(undefined);
         }
     }, [isOpen, campaignId, page, limit]);
 
@@ -58,6 +63,8 @@ export function CampaignLogsViewer({ campaignId, isOpen }: CampaignLogsViewerPro
 
                 setLogs(normalized);
                 setTotal(responseData.total || normalized.length || 0);
+                setOffsetStart(responseData.offset_start);
+                setOffsetEnd(responseData.offset_end);
             }
         } catch (error) {
             console.error('Failed to fetch logs', error);
@@ -99,7 +106,7 @@ export function CampaignLogsViewer({ campaignId, isOpen }: CampaignLogsViewerPro
         {
             key: 'time',
             header: 'Time',
-            cell: (log) => new Date(log.created_at).toLocaleString(),
+            cell: (log) => formatDateTime(log.created_at),
         }
     ];
 
@@ -111,6 +118,8 @@ export function CampaignLogsViewer({ campaignId, isOpen }: CampaignLogsViewerPro
                 columns={columns}
                 data={logs}
                 total={total}
+                offsetStart={offsetStart}
+                offsetEnd={offsetEnd}
                 page={page}
                 limit={limit}
                 totalPages={Math.ceil(total / limit)}

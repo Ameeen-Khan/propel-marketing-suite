@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { Campaign, CampaignStatus, ScheduleType, RecurrenceMode } from '@/types';
+import { cn, formatDateTime, formatTime } from '@/lib/utils';
 import {
   Plus,
   MoreHorizontal,
@@ -71,8 +72,11 @@ export function CampaignsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState('');
   const [total, setTotal] = useState(0);
+  const [offsetStart, setOffsetStart] = useState<number | undefined>(undefined);
+  const [offsetEnd, setOffsetEnd] = useState<number | undefined>(undefined);
+
+
 
   // Dialog states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -111,7 +115,7 @@ export function CampaignsPage() {
       await fetchCampaigns();
     };
     loadData();
-  }, [page, limit, search]);
+  }, [page, limit]);
 
   const fetchTemplates = async () => {
     try {
@@ -164,7 +168,6 @@ export function CampaignsPage() {
       const response = await campaignsApi.list({
         page,
         limit,
-        search,
         sort_by: 'created_at',
         sort_order: 'desc'
       });
@@ -203,9 +206,8 @@ export function CampaignsPage() {
 
           // Safely handle scheduled_at date string
           let normalizedScheduledAt = scheduledAt;
-          if (normalizedScheduledAt && typeof normalizedScheduledAt === 'string') {
-            normalizedScheduledAt = normalizedScheduledAt.replace(/Z$/, '');
-          }
+          // No longer stripping 'Z' as it's needed for proper timezone conversion to IST
+
 
           // Populate template name from templates list
           const templateId = c.template_id || c.TemplateID || c.TemplateId;
@@ -237,6 +239,8 @@ export function CampaignsPage() {
 
         setCampaigns(normalized);
         setTotal(responseData.total || normalized.length || 0);
+        setOffsetStart(responseData.offset_start);
+        setOffsetEnd(responseData.offset_end);
       } else {
         toast({
           title: 'Error',
@@ -485,13 +489,13 @@ export function CampaignsPage() {
           }
 
           if (campaign.recurrence.time) {
-            scheduleText += ` at ${campaign.recurrence.time}`;
+            scheduleText += ` at ${formatTime(campaign.recurrence.time)}`;
           }
 
           return scheduleText;
         }
         if (campaign.scheduled_at) {
-          return new Date(campaign.scheduled_at).toLocaleString();
+          return formatDateTime(campaign.scheduled_at);
         }
         return '-';
       },
@@ -550,11 +554,12 @@ export function CampaignsPage() {
         total={total}
         page={page}
         limit={limit}
+        offsetStart={offsetStart}
+        offsetEnd={offsetEnd}
         totalPages={Math.ceil(total / limit)}
         onPageChange={setPage}
         onLimitChange={(newLimit) => { setLimit(newLimit); setPage(1); }}
-        onSearch={(value) => { setSearch(value); setPage(1); }}
-        searchPlaceholder="Search campaigns..."
+
         isLoading={isLoading}
         emptyMessage="No campaigns found"
       />

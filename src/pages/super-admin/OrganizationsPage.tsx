@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { cn, formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -36,7 +37,11 @@ import { z } from 'zod';
 import { organizationsApi, agentsApi } from '@/services/api';
 
 const orgSchema = z.object({
-  name: z.string().min(1, 'Organization name is required').max(100, 'Name must be under 100 characters'),
+  name: z.string()
+    .min(1, 'Organization name cannot be empty')
+    .max(100, 'Name must be under 100 characters')
+    .regex(/^[a-zA-Z\s]+$/, 'Name can only contain alphabetic characters and spaces')
+    .refine((val) => !val.includes('  '), 'Name cannot contain multiple consecutive spaces'),
 });
 
 export function OrganizationsPage() {
@@ -47,7 +52,7 @@ export function OrganizationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState('');
+
   const [total, setTotal] = useState(0);
 
   // Dialog state
@@ -63,26 +68,24 @@ export function OrganizationsPage() {
     fetchOrganizations();
   }, []);
 
-  // Filter and paginate locally whenever data, search, page, or limit changes
+  // Filter and paginate locally whenever data, page, or limit changes
   useEffect(() => {
     let filtered = allOrganizations;
 
-    // Client-side search
-    if (search) {
-      const lowerSearch = search.toLowerCase();
-      filtered = allOrganizations.filter(org =>
-        org.name.toLowerCase().includes(lowerSearch)
-      );
-    }
-
     setTotal(filtered.length);
+
+    // Auto-correct page if out of bounds due to filtering
+    const totalPages = Math.ceil(filtered.length / limit);
+    if (page > totalPages && totalPages > 0) {
+      setPage(1);
+    }
 
     // Client-side pagination
     const start = (page - 1) * limit;
     const end = start + limit;
     setOrganizations(filtered.slice(start, end));
 
-  }, [allOrganizations, search, page, limit]);
+  }, [allOrganizations, page, limit]);
 
   const fetchOrganizations = async () => {
     setIsLoading(true);
@@ -269,7 +272,14 @@ export function OrganizationsPage() {
     {
       key: 'name',
       header: 'Organization Name',
-      cell: (org) => <span className="font-medium">{org.name}</span>,
+      cell: (org) => (
+        <span
+          className="font-medium text-primary hover:underline cursor-pointer"
+          onClick={() => navigate(`/sa/organizations/${org.id}`)}
+        >
+          {org.name}
+        </span>
+      ),
     },
     {
       key: 'status',
@@ -290,7 +300,7 @@ export function OrganizationsPage() {
       header: 'Created',
       cell: (org) => (
         <span className="text-muted-foreground">
-          {new Date(org.created_at).toLocaleDateString()}
+          {formatDate(org.created_at)}
         </span>
       ),
     },
@@ -314,10 +324,10 @@ export function OrganizationsPage() {
               <Pencil className="w-4 h-4 mr-2" />
               Edit
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate(`/sa/organizations/${org.id}/agents`)}>
+            <DropdownMenuItem onClick={() => navigate(`/ sa / organizations / ${org.id}/agents`)}>
               <Users className="w-4 h-4 mr-2" />
               Manage Agents
-            </DropdownMenuItem>
+            </DropdownMenuItem >
             <DropdownMenuItem onClick={() => handleToggleActive(org)}>
               {org.is_active ? (
                 <>
@@ -331,8 +341,8 @@ export function OrganizationsPage() {
                 </>
               )}
             </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </DropdownMenuContent >
+        </DropdownMenu >
       ),
     },
   ];
@@ -359,8 +369,7 @@ export function OrganizationsPage() {
         totalPages={Math.ceil(total / limit)}
         onPageChange={setPage}
         onLimitChange={(newLimit) => { setLimit(newLimit); setPage(1); }}
-        onSearch={(value) => { setSearch(value); setPage(1); }}
-        searchPlaceholder="Search organizations..."
+
         isLoading={isLoading}
         emptyMessage="No organizations found"
       />
@@ -374,28 +383,30 @@ export function OrganizationsPage() {
               Add a new organization to the platform.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="org-name">Organization Name</Label>
-              <Input
-                id="org-name"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="Enter organization name"
-                className={formError ? 'border-destructive' : ''}
-              />
-              {formError && <p className="text-sm text-destructive">{formError}</p>}
+          <form onSubmit={(e) => { e.preventDefault(); handleCreate(); }}>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="org-name">Organization Name</Label>
+                <Input
+                  id="org-name"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="Enter organization name"
+                  className={formError ? 'border-destructive' : ''}
+                />
+                {formError && <p className="text-sm text-destructive">{formError}</p>}
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreate} disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Create
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setIsCreateOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -408,28 +419,30 @@ export function OrganizationsPage() {
               Update organization details.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-org-name">Organization Name</Label>
-              <Input
-                id="edit-org-name"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="Enter organization name"
-                className={formError ? 'border-destructive' : ''}
-              />
-              {formError && <p className="text-sm text-destructive">{formError}</p>}
+          <form onSubmit={(e) => { e.preventDefault(); handleEdit(); }}>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-org-name">Organization Name</Label>
+                <Input
+                  id="edit-org-name"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="Enter organization name"
+                  className={formError ? 'border-destructive' : ''}
+                />
+                {formError && <p className="text-sm text-destructive">{formError}</p>}
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleEdit} disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Save Changes
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setIsEditOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

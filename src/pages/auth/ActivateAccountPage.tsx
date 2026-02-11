@@ -12,7 +12,12 @@ import { authApi } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 const activateSchema = z.object({
-    password: z.string().min(8, 'Password must be at least 8 characters'),
+    password: z.string()
+        .min(6, 'Password must be at least 6 characters')
+        .max(20, 'Password must not exceed 20 characters')
+        .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+        .regex(/[0-9]/, 'Password must contain at least one digit')
+        .regex(/[^a-zA-Z0-9]/, 'Password must contain at least one special character'),
     confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",

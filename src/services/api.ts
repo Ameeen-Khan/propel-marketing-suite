@@ -22,6 +22,7 @@ import {
   CampaignLog,
   Notification,
   CSVImportJob,
+  CSVImportResponse,
   PaginationParams,
   PaginatedResponse,
   ApiResponse,
@@ -71,7 +72,7 @@ async function apiFetch<T>(
     });
 
     // Check for authorization errors immediately
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       if (authToken) {
         // Clear token and trigger logout if we were previously authenticated
         setAuthToken(null);
@@ -114,9 +115,11 @@ async function apiFetch<T>(
       };
     }
 
+    const normalizedData = normalizePaginatedResponse(data.data || data);
+
     return {
       success: true,
-      data: data.data || data,
+      data: normalizedData,
     };
   } catch (error) {
     return {
@@ -124,6 +127,41 @@ async function apiFetch<T>(
       message: error instanceof Error ? error.message : 'Network error',
     };
   }
+}
+
+// Helper to normalize backend pagination response to frontend expectation
+function normalizePaginatedResponse(data: any): any {
+  // Check if it looks like a paginated response from backend
+  // Must have 'page' AND ('total_count' OR 'total')
+  if (data && typeof data === 'object' && 'page' in data && ('total_count' in data || 'total' in data)) {
+    const total = data.total_count !== undefined ? data.total_count : data.total;
+    const limit = data.limit || 20;
+
+    // If total_pages is missing, calculate it
+    const totalPages = data.total_pages !== undefined
+      ? data.total_pages
+      : (limit > 0 ? Math.ceil(total / limit) : 0);
+
+    // Find the array property that holds the items
+    // We look for any property that is an array and exclude known metadata keys
+    const metadataKeys = ['total_count', 'total', 'page', 'limit', 'total_pages', 'offset_start', 'offset_end', 'stats'];
+    const arrayKey = Object.keys(data).find(key =>
+      !metadataKeys.includes(key) && Array.isArray(data[key])
+    );
+
+    if (arrayKey) {
+      return {
+        data: data[arrayKey],
+        total: total,
+        page: data.page,
+        limit: limit,
+        total_pages: totalPages,
+        // Keep original metadata just in case
+        ...data
+      };
+    }
+  }
+  return data;
 }
 
 // Build query string from pagination params
@@ -335,7 +373,7 @@ export const contactsApi = {
     const formData = new FormData();
     formData.append('file', file);
 
-    return apiFetch<CSVImportJob>('/agent/contacts/import', {
+    return apiFetch<CSVImportResponse>('/agent/contacts/import', {
       method: 'POST',
       body: formData,
     });

@@ -23,6 +23,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { EmailTemplate } from '@/types';
+import { cn, formatDate } from '@/lib/utils';
 import {
   Plus,
   MoreHorizontal,
@@ -38,8 +39,6 @@ import { emailTemplatesApi } from '@/services/api';
 const templateSchema = z.object({
   name: z.string().min(1, 'Template name is required').max(100),
   subject: z.string().min(1, 'Subject is required').max(200),
-  preheader: z.string().max(200).optional(),
-  from_name: z.string().min(1, 'From name is required').max(100),
   html_body: z.string().optional(),
   plain_text_body: z.string().optional(),
 }).refine(data => data.html_body || data.plain_text_body, {
@@ -54,7 +53,6 @@ export function TemplatesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState('');
   const [total, setTotal] = useState(0);
 
   // Dialog states
@@ -72,15 +70,13 @@ export function TemplatesPage() {
   const [formData, setFormData] = useState({
     name: '',
     subject: '',
-    preheader: '',
-    from_name: defaultFromName,
     html_body: '',
     plain_text_body: '',
   });
 
   useEffect(() => {
     fetchTemplates();
-  }, [page, limit, search]);
+  }, [page, limit]);
 
   const fetchTemplates = async () => {
     setIsLoading(true);
@@ -88,7 +84,6 @@ export function TemplatesPage() {
       const response = await emailTemplatesApi.list({
         page,
         limit,
-        search,
         sort_by: 'updated_at',
         sort_order: 'desc'
       });
@@ -139,8 +134,6 @@ export function TemplatesPage() {
     setFormData({
       name: '',
       subject: '',
-      preheader: '',
-      from_name: defaultFromName,
       html_body: '',
       plain_text_body: '',
     });
@@ -292,8 +285,6 @@ export function TemplatesPage() {
     setFormData({
       name: template.name,
       subject: template.subject,
-      preheader: template.preheader || '',
-      from_name: template.from_name,
       html_body: template.html_body,
       plain_text_body: template.plain_text_body,
     });
@@ -315,16 +306,11 @@ export function TemplatesPage() {
       ),
     },
     {
-      key: 'from_name',
-      header: 'From',
-      cell: (template) => template.from_name,
-    },
-    {
       key: 'updated_at',
       header: 'Last Updated',
       cell: (template) => (
         <span className="text-muted-foreground">
-          {new Date(template.updated_at).toLocaleDateString()}
+          {formatDate(template.updated_at)}
         </span>
       ),
     },
@@ -376,8 +362,6 @@ export function TemplatesPage() {
         totalPages={Math.ceil(total / limit)}
         onPageChange={setPage}
         onLimitChange={(newLimit) => { setLimit(newLimit); setPage(1); }}
-        onSearch={(value) => { setSearch(value); setPage(1); }}
-        searchPlaceholder="Search templates..."
         isLoading={isLoading}
         emptyMessage="No templates found"
       />
@@ -398,96 +382,85 @@ export function TemplatesPage() {
               {isEditOpen ? 'Update template details and content.' : 'Create a new email template.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Template Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className={formErrors.name ? 'border-destructive' : ''}
-                />
-                {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              isEditOpen ? handleEdit() : handleCreate();
+            }}
+            className="contents"
+          >
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Template Name *</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className={formErrors.name ? 'border-destructive' : ''}
+                  />
+                  {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="subject">Subject *</Label>
+                  <Input
+                    id="subject"
+                    value={formData.subject}
+                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                    placeholder="Use {{variable}} for dynamic content"
+                    className={formErrors.subject ? 'border-destructive' : ''}
+                  />
+                  {formErrors.subject && <p className="text-sm text-destructive">{formErrors.subject}</p>}
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="subject">Subject *</Label>
-                <Input
-                  id="subject"
-                  value={formData.subject}
-                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                  placeholder="Use {{variable}} for dynamic content"
-                  className={formErrors.subject ? 'border-destructive' : ''}
-                />
-                {formErrors.subject && <p className="text-sm text-destructive">{formErrors.subject}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="from_name">From Name *</Label>
-                <Input
-                  id="from_name"
-                  value={formData.from_name}
-                  onChange={(e) => setFormData({ ...formData, from_name: e.target.value })}
-                  className={formErrors.from_name ? 'border-destructive' : ''}
-                />
-                {formErrors.from_name && <p className="text-sm text-destructive">{formErrors.from_name}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="preheader">Preheader</Label>
-                <Input
-                  id="preheader"
-                  value={formData.preheader}
-                  onChange={(e) => setFormData({ ...formData, preheader: e.target.value })}
-                  placeholder="Preview text shown in inbox"
-                />
-              </div>
-            </div>
 
-            <Tabs defaultValue="html" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="html" className="gap-2">
-                  <Code className="w-4 h-4" />
-                  HTML Body
-                </TabsTrigger>
-                <TabsTrigger value="plain" className="gap-2">
-                  <FileText className="w-4 h-4" />
-                  Plain Text
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="html" className="mt-4">
-                <div className="space-y-2">
-                  <Label>HTML Body *</Label>
-                  <Textarea
-                    value={formData.html_body}
-                    onChange={(e) => setFormData({ ...formData, html_body: e.target.value })}
-                    className={`font-mono text-sm min-h-[300px] ${formErrors.html_body ? 'border-destructive' : ''}`}
-                    placeholder="<html>...</html>"
-                  />
-                  {formErrors.html_body && <p className="text-sm text-destructive">{formErrors.html_body}</p>}
-                </div>
-              </TabsContent>
-              <TabsContent value="plain" className="mt-4">
-                <div className="space-y-2">
-                  <Label>Plain Text Body *</Label>
-                  <Textarea
-                    value={formData.plain_text_body}
-                    onChange={(e) => setFormData({ ...formData, plain_text_body: e.target.value })}
-                    className={`min-h-[300px] ${formErrors.plain_text_body ? 'border-destructive' : ''}`}
-                    placeholder="Plain text version of your email..."
-                  />
-                  {formErrors.plain_text_body && <p className="text-sm text-destructive">{formErrors.plain_text_body}</p>}
-                </div>
-              </TabsContent>
-            </Tabs>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setIsCreateOpen(false); setIsEditOpen(false); resetForm(); }}>
-              Cancel
-            </Button>
-            <Button onClick={isEditOpen ? handleEdit : handleCreate} disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {isEditOpen ? 'Save Changes' : 'Create Template'}
-            </Button>
-          </DialogFooter>
+              <Tabs defaultValue="html" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="html" className="gap-2">
+                    <Code className="w-4 h-4" />
+                    HTML Body
+                  </TabsTrigger>
+                  <TabsTrigger value="plain" className="gap-2">
+                    <FileText className="w-4 h-4" />
+                    Plain Text
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="html" className="mt-4">
+                  <div className="space-y-2">
+                    <Label>HTML Body *</Label>
+                    <Textarea
+                      value={formData.html_body}
+                      onChange={(e) => setFormData({ ...formData, html_body: e.target.value })}
+                      className={`font-mono text-sm min-h-[300px] ${formErrors.html_body ? 'border-destructive' : ''}`}
+                      placeholder="<html>...</html>"
+                    />
+                    {formErrors.html_body && <p className="text-sm text-destructive">{formErrors.html_body}</p>}
+                  </div>
+                </TabsContent>
+                <TabsContent value="plain" className="mt-4">
+                  <div className="space-y-2">
+                    <Label>Plain Text Body *</Label>
+                    <Textarea
+                      value={formData.plain_text_body}
+                      onChange={(e) => setFormData({ ...formData, plain_text_body: e.target.value })}
+                      className={`min-h-[300px] ${formErrors.plain_text_body ? 'border-destructive' : ''}`}
+                      placeholder="Plain text version of your email..."
+                    />
+                    {formErrors.plain_text_body && <p className="text-sm text-destructive">{formErrors.plain_text_body}</p>}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => { setIsCreateOpen(false); setIsEditOpen(false); resetForm(); }}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isEditOpen ? 'Save Changes' : 'Create Template'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -501,27 +474,35 @@ export function TemplatesPage() {
               Send a test email using the "{selectedTemplate?.name}" template.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <div className="space-y-2">
-              <Label htmlFor="test-email">Email Address</Label>
-              <Input
-                id="test-email"
-                type="email"
-                value={testEmail}
-                onChange={(e) => setTestEmail(e.target.value)}
-                placeholder="Enter email address"
-              />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleTestSend();
+            }}
+            className="contents"
+          >
+            <div className="py-4">
+              <div className="space-y-2">
+                <Label htmlFor="test-email">Email Address</Label>
+                <Input
+                  id="test-email"
+                  type="email"
+                  value={testEmail}
+                  onChange={(e) => setTestEmail(e.target.value)}
+                  placeholder="Enter email address"
+                />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setIsTestSendOpen(false); setTestEmail(''); }}>
-              Cancel
-            </Button>
-            <Button onClick={handleTestSend} disabled={isSubmitting || !testEmail}>
-              {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Send Test
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => { setIsTestSendOpen(false); setTestEmail(''); }}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting || !testEmail}>
+                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Send Test
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
