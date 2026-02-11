@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Notification, NotificationType } from '@/types';
 import { Bell, CheckCheck, Info, AlertCircle, CheckCircle, AlertTriangle, Loader2, Send, Upload, UserPlus, XCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import { notificationsApi } from '@/services/api';
 
 
@@ -49,7 +49,7 @@ export function NotificationsPage() {
           message: n.message || n.Message,
           notification_type: (n.notification_type || n.NotificationType || 'info').toLowerCase(),
           is_read: n.is_read !== undefined ? n.is_read : (n.IsRead !== undefined ? n.IsRead : false),
-          created_at: (n.created_at || n.CreatedAt || new Date().toISOString()).replace(/Z$/, ''),
+          created_at: n.created_at || n.CreatedAt || new Date().toISOString(),
         }));
 
         setNotifications(normalized);
@@ -123,7 +123,7 @@ export function NotificationsPage() {
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
+    return formatDate(date);
   };
 
   if (isLoading) {

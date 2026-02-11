@@ -41,6 +41,8 @@ export interface DataTableProps<T> {
   page: number;
   limit: number;
   totalPages: number;
+  offsetStart?: number;
+  offsetEnd?: number;
   onPageChange: (page: number) => void;
   onLimitChange: (limit: number) => void;
   onSearch?: (search: string) => void;
@@ -57,6 +59,8 @@ export function DataTable<T>({
   page,
   limit,
   totalPages,
+  offsetStart,
+  offsetEnd,
   onPageChange,
   onLimitChange,
   onSearch,
@@ -86,30 +90,31 @@ export function DataTable<T>({
     };
   }, []);
 
-  const startItem = (page - 1) * limit + 1;
-  const endItem = Math.min(page * limit, total);
+  const safePage = Math.max(1, Math.min(page, Math.max(1, totalPages)));
+  const startItem = offsetStart !== undefined ? offsetStart : (total === 0 ? 0 : Math.min((safePage - 1) * limit + 1, total));
+  const endItem = offsetEnd !== undefined ? offsetEnd : Math.min(safePage * limit, total);
 
   return (
     <div className="table-container">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4 p-4 border-b border-border">
-        <div className="flex items-center gap-4 flex-1">
-          {onSearch && (
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={searchPlaceholder}
-                value={searchValue}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          )}
+      {(onSearch || actions) && (
+        <div className="flex items-center justify-between gap-4 p-4 border-b border-border">
+          <div className="flex items-center gap-4 flex-1">
+            {onSearch && (
+              <div className="relative max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder={searchPlaceholder}
+                  value={searchValue}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            )}
+          </div>
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
-      </div>
-
-      {/* Table */}
+      )}
       <div className="relative">
         {isLoading && (
           <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
@@ -179,8 +184,8 @@ export function DataTable<T>({
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
-            {total > 0 ? `${startItem}-${endItem} of ${total}` : "0 results"}
+          <span className="text-sm text-muted-foreground font-medium">
+            Page {safePage} of {Math.max(1, totalPages)}
           </span>
           <div className="flex items-center gap-1">
             <Button
@@ -188,7 +193,7 @@ export function DataTable<T>({
               size="icon"
               className="h-8 w-8"
               onClick={() => onPageChange(1)}
-              disabled={page === 1 || isLoading}
+              disabled={page <= 1 || isLoading}
             >
               <ChevronsLeft className="h-4 w-4" />
             </Button>
@@ -196,8 +201,8 @@ export function DataTable<T>({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => onPageChange(page - 1)}
-              disabled={page === 1 || isLoading}
+              onClick={() => onPageChange(Math.max(1, page - 1))}
+              disabled={page <= 1 || isLoading}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -205,7 +210,7 @@ export function DataTable<T>({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => onPageChange(page + 1)}
+              onClick={() => onPageChange(Math.min(totalPages, page + 1))}
               disabled={page >= totalPages || isLoading}
             >
               <ChevronRight className="h-4 w-4" />

@@ -45,8 +45,24 @@ import { z } from 'zod';
 import { agentsApi } from '@/services/api';
 
 const agentSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100, 'Name must be under 100 characters'),
-  email: z.string().email('Please enter a valid email'),
+  name: z.string()
+    .min(1, 'Name is required')
+    .max(100)
+    .regex(/^[a-zA-Z\s]+$/, 'Name must contain only alphabetic characters')
+    .refine((val) => {
+      const parts = val.trim().split(' ');
+      return parts.length === 2;
+    }, 'Name must contain exactly one space between first name and surname')
+    .refine((val) => {
+      const parts = val.trim().split(' ');
+      return parts.length === 2 && parts[0].length >= 2 && parts[1].length >= 2;
+    }, 'Each name part must be at least 2 characters long'),
+  email: z.string()
+    .email('Please enter a valid email')
+    .refine((val) => {
+      const [local] = val.split('@');
+      return /^[a-z0-9]+$/.test(local);
+    }, 'Email local part must contain only lowercase letters and numbers'),
   role: z.enum(['org_admin', 'org_user'], { required_error: 'Role is required' }),
 });
 
@@ -59,7 +75,6 @@ export function OrganizationAgentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState('');
   const [total, setTotal] = useState(0);
 
   // Dialog state
@@ -74,7 +89,7 @@ export function OrganizationAgentsPage() {
     if (id) {
       fetchAgents();
     }
-  }, [page, limit, search, id]);
+  }, [page, limit, id]);
 
   const fetchAgents = async () => {
     if (!id) return;
@@ -83,7 +98,6 @@ export function OrganizationAgentsPage() {
       const response = await agentsApi.list({
         page,
         limit,
-        search,
         sort_by: 'created_at',
         sort_order: 'desc'
       }, id);
@@ -381,8 +395,6 @@ export function OrganizationAgentsPage() {
         totalPages={Math.ceil(total / limit)}
         onPageChange={setPage}
         onLimitChange={(newLimit) => { setLimit(newLimit); setPage(1); }}
-        onSearch={(value) => { setSearch(value); setPage(1); }}
-        searchPlaceholder="Search agents..."
         isLoading={isLoading}
         emptyMessage="No agents found"
       />
@@ -396,56 +408,58 @@ export function OrganizationAgentsPage() {
               Create a new agent and send them an invitation.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="agent-name">Name</Label>
-              <Input
-                id="agent-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter agent name"
-                className={formErrors.name ? 'border-destructive' : ''}
-              />
-              {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
+          <form onSubmit={(e) => { e.preventDefault(); handleCreate(); }}>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="agent-name">Name</Label>
+                <Input
+                  id="agent-name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Enter agent name"
+                  className={formErrors.name ? 'border-destructive' : ''}
+                />
+                {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="agent-email">Email</Label>
+                <Input
+                  id="agent-email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="Enter agent email"
+                  className={formErrors.email ? 'border-destructive' : ''}
+                />
+                {formErrors.email && <p className="text-sm text-destructive">{formErrors.email}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="agent-role">Role</Label>
+                <Select
+                  value={formData.role}
+                  onValueChange={(value: 'org_admin' | 'org_user') => setFormData({ ...formData, role: value })}
+                >
+                  <SelectTrigger className={formErrors.role ? 'border-destructive' : ''}>
+                    <SelectValue placeholder="Select a role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="org_admin">Org Admin</SelectItem>
+                    <SelectItem value="org_user">Org User</SelectItem>
+                  </SelectContent>
+                </Select>
+                {formErrors.role && <p className="text-sm text-destructive">{formErrors.role}</p>}
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="agent-email">Email</Label>
-              <Input
-                id="agent-email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="Enter agent email"
-                className={formErrors.email ? 'border-destructive' : ''}
-              />
-              {formErrors.email && <p className="text-sm text-destructive">{formErrors.email}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="agent-role">Role</Label>
-              <Select
-                value={formData.role}
-                onValueChange={(value: 'org_admin' | 'org_user') => setFormData({ ...formData, role: value })}
-              >
-                <SelectTrigger className={formErrors.role ? 'border-destructive' : ''}>
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="org_admin">Org Admin</SelectItem>
-                  <SelectItem value="org_user">Org User</SelectItem>
-                </SelectContent>
-              </Select>
-              {formErrors.role && <p className="text-sm text-destructive">{formErrors.role}</p>}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreate} disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Create & Send Invite
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setIsCreateOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Create & Send Invite
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -458,56 +472,58 @@ export function OrganizationAgentsPage() {
               Update agent details.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-agent-name">Name</Label>
-              <Input
-                id="edit-agent-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter agent name"
-                className={formErrors.name ? 'border-destructive' : ''}
-              />
-              {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
+          <form onSubmit={(e) => { e.preventDefault(); handleEdit(); }}>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-agent-name">Name</Label>
+                <Input
+                  id="edit-agent-name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Enter agent name"
+                  className={formErrors.name ? 'border-destructive' : ''}
+                />
+                {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-agent-email">Email</Label>
+                <Input
+                  id="edit-agent-email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="Enter agent email"
+                  className={formErrors.email ? 'border-destructive' : ''}
+                />
+                {formErrors.email && <p className="text-sm text-destructive">{formErrors.email}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-agent-role">Role</Label>
+                <Select
+                  value={formData.role}
+                  onValueChange={(value: 'org_admin' | 'org_user') => setFormData({ ...formData, role: value })}
+                >
+                  <SelectTrigger className={formErrors.role ? 'border-destructive' : ''}>
+                    <SelectValue placeholder="Select a role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="org_admin">Org Admin</SelectItem>
+                    <SelectItem value="org_user">Org User</SelectItem>
+                  </SelectContent>
+                </Select>
+                {formErrors.role && <p className="text-sm text-destructive">{formErrors.role}</p>}
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-agent-email">Email</Label>
-              <Input
-                id="edit-agent-email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="Enter agent email"
-                className={formErrors.email ? 'border-destructive' : ''}
-              />
-              {formErrors.email && <p className="text-sm text-destructive">{formErrors.email}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-agent-role">Role</Label>
-              <Select
-                value={formData.role}
-                onValueChange={(value: 'org_admin' | 'org_user') => setFormData({ ...formData, role: value })}
-              >
-                <SelectTrigger className={formErrors.role ? 'border-destructive' : ''}>
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="org_admin">Org Admin</SelectItem>
-                  <SelectItem value="org_user">Org User</SelectItem>
-                </SelectContent>
-              </Select>
-              {formErrors.role && <p className="text-sm text-destructive">{formErrors.role}</p>}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleEdit} disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Save Changes
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setIsEditOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
